@@ -1,3 +1,6 @@
+window.onerror = function(msg, src, line) {
+  alert("ERROR JS: " + msg + " (" + line + ")");
+};
 let data = JSON.parse(localStorage.getItem("guardias")) || {};
 let backup = JSON.parse(localStorage.getItem("guardias_backup")) || null;
 
@@ -22,6 +25,8 @@ function loginUser() {
     return;
   }
 
+  console.log("LOGIN USER OK:", username);
+
   role = "user";
   startApp();
 }
@@ -33,6 +38,8 @@ function loginAdmin() {
     alert("Introduce admin");
     return;
   }
+
+  console.log("LOGIN ADMIN OK:", name);
 
   username = name;
   role = "admin";
@@ -46,9 +53,22 @@ function logout() {
 }
 
 function startApp() {
-  document.getElementById("loginScreen").classList.add("hidden");
-  document.getElementById("app").classList.remove("hidden");
-  document.getElementById("topBar").classList.remove("hidden");
+  console.log("START APP EJECUTADO");
+
+  const login = document.getElementById("loginScreen");
+  const app = document.getElementById("app");
+  const topbar = document.getElementById("topBar");
+
+  if (!login || !app || !topbar) {
+    console.error("Falta un elemento del DOM:", {
+      login, app, topbar
+    });
+    return;
+  }
+
+  login.classList.add("hidden");
+  app.classList.remove("hidden");
+  topbar.classList.remove("hidden");
 
   document.getElementById("name").value = username;
   document.getElementById("name").disabled = true;
