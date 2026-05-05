@@ -17,20 +17,21 @@ const month = 4;
 function loginUser() {
   username = document.getElementById("userNameLogin").value.trim();
 
-  if (!username) return alert("Introduce nombre");
+  if (!username) {
+    alert("Introduce nombre");
+    return;
+  }
 
   role = "user";
-
   startApp();
 }
 
 function loginAdmin() {
   const name = document.getElementById("adminNameLogin").value.trim();
 
-  if (!name) return alert("Introduce admin");
-
-  if (!["R3", "R4"].includes(name)) {
-    return alert("Solo R3 o R4 pueden ser admin");
+  if (!name) {
+    alert("Introduce admin");
+    return;
   }
 
   username = name;

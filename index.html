@@ -5,72 +5,77 @@
   <title>Guardias MIR</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-    
-    <body>
 
+<body>
+
+<!-- LOGIN -->
 <div id="loginScreen" class="login-overlay">
 
   <div class="login-card">
     <h2>Guardias MIR</h2>
 
-    <p class="subtitle">¿Eres el administrador de este mes?</p>
+    <p>¿Eres el administrador de este mes?</p>
 
     <hr>
 
     <h3>Usuario normal</h3>
     <input id="userNameLogin" placeholder="Tu nombre">
-
     <button onclick="loginUser()">Entrar como usuario</button>
 
     <hr>
 
     <h3>Administrador</h3>
-    <input id="adminNameLogin" placeholder="Nombre admin (R3/R4)">
-    
+    <input id="adminNameLogin" placeholder="Nombre admin">
     <button onclick="loginAdmin()">Entrar como administrador</button>
+
   </div>
 
 </div>
 
-<!-- HEADER STATUS -->
+<!-- TOP BAR -->
 <div id="topBar" class="topbar hidden">
   <span id="roleBadge"></span>
   <button onclick="logout()">Cerrar sesión</button>
 </div>
 
-<div class="container hidden" id="app">
+<!-- APP -->
+<div id="app" class="hidden">
 
-  <div class="calendar">
-    <h2 id="monthTitle"></h2>
-    <div id="calendarGrid"></div>
-  </div>
+  <div class="container">
 
-  <div class="sidebar">
+    <div class="calendar">
+      <h2 id="monthTitle"></h2>
+      <div id="calendarGrid"></div>
+    </div>
 
-    <h3>Proponer guardias</h3>
+    <div class="sidebar">
 
-    <input id="name" disabled>
+      <h3>Proponer guardias</h3>
 
-    <select id="level">
-      <option>R1</option>
-      <option>R2</option>
-      <option>R3</option>
-      <option>R4</option>
-    </select>
+      <input id="name" disabled>
 
-    <input id="numShifts" type="number" min="2" max="4" value="2">
+      <select id="level">
+        <option>R1</option>
+        <option>R2</option>
+        <option>R3</option>
+        <option>R4</option>
+      </select>
 
-    <input id="days" placeholder="1,5,12">
+      <input id="numShifts" type="number" min="2" max="4" value="2">
 
-    <button onclick="submitProposal()">Enviar propuesta</button>
+      <input id="days" placeholder="1,5,12">
 
-    <hr>
+      <button onclick="submitProposal()">Enviar propuesta</button>
 
-    <button id="resetBtn" onclick="resetMonth()">Reset mes</button>
-    <button id="restoreBtn" onclick="restoreMonth()">Restaurar mes</button>
+      <hr>
 
-    <h3>Usuarios</h3>
-    <div id="userList"></div>
+      <button id="resetBtn" onclick="resetMonth()">Reset mes</button>
+      <button id="restoreBtn" onclick="restoreMonth()">Restaurar mes</button>
+
+      <h3>Usuarios</h3>
+      <div id="userList"></div>
+
+    </div>
 
   </div>
 
@@ -78,5 +83,4 @@
 
 <script src="app.js"></script>
 </body>
-    
 </html>
