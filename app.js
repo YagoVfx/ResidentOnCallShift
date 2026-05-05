@@ -1,219 +1,187 @@
 let data = JSON.parse(localStorage.getItem("guardias")) || {};
-let admin = localStorage.getItem("admin") || null;
-let role = localStorage.getItem("role") || null;
+let backup = JSON.parse(localStorage.getItem("guardias_backup")) || null;
+
+let role = null;
+let username = null;
 
 const calendarGrid = document.getElementById("calendarGrid");
 const userList = document.getElementById("userList");
 
 const year = 2026;
-const month = 4; // 👈 MAYO (0 = enero)
+const month = 4;
 
-function save() {
-  localStorage.setItem("guardias", JSON.stringify(data));
-  localStorage.setItem("admin", admin);
-  localStorage.setItem("role", role);
-}
+/* =========================
+   LOGIN
+========================= */
 
-/* ======================
-   LOGIN SYSTEM
-====================== */
+function loginUser() {
+  username = document.getElementById("userNameLogin").value.trim();
 
-function enterUser() {
+  if (!username) return alert("Introduce nombre");
+
   role = "user";
-  localStorage.setItem("role", role);
-  document.getElementById("loginScreen").style.display = "none";
-  renderAll();
+
+  startApp();
 }
 
-function enterAdmin() {
-  const name = document.getElementById("adminLoginName").value;
+function loginAdmin() {
+  const name = document.getElementById("adminNameLogin").value.trim();
 
-  if (!name) {
-    alert("Introduce nombre admin");
-    return;
-  }
+  if (!name) return alert("Introduce admin");
 
   if (!["R3", "R4"].includes(name)) {
-    alert("Solo R3 o R4 pueden ser admin");
-    return;
+    return alert("Solo R3 o R4 pueden ser admin");
   }
 
-  admin = name;
+  username = name;
   role = "admin";
 
-  localStorage.setItem("admin", admin);
-  localStorage.setItem("role", role);
+  startApp();
+}
 
-  document.getElementById("loginScreen").style.display = "none";
+function logout() {
+  localStorage.clear();
+  location.reload();
+}
+
+function startApp() {
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("topBar").classList.remove("hidden");
+
+  document.getElementById("name").value = username;
+  document.getElementById("name").disabled = true;
+
+  setupUI();
   renderAll();
+}
+
+/* =========================
+   UI ROLE CONTROL
+========================= */
+
+function setupUI() {
+  const badge = document.getElementById("roleBadge");
+
+  if (role === "admin") {
+    badge.innerText = "ADMINISTRADOR";
+    badge.className = "admin";
+
+    document.getElementById("resetBtn").style.display = "block";
+    document.getElementById("restoreBtn").style.display = "block";
+  } else {
+    badge.innerText = "USUARIO NORMAL";
+    badge.className = "user";
+
+    document.getElementById("resetBtn").style.display = "none";
+    document.getElementById("restoreBtn").style.display = "none";
+  }
 }
 
 function isAdmin() {
   return role === "admin";
 }
 
-/* ======================
-   CORE
-====================== */
+/* =========================
+   BACKUP SYSTEM
+========================= */
 
 function resetMonth() {
   if (!isAdmin()) return;
 
-  if (!confirm("¿Borrar todo el mes?")) return;
+  if (!confirm("¿Seguro? Se hará backup automático")) return;
+
+  backup = structuredClone(data);
+  localStorage.setItem("guardias_backup", JSON.stringify(backup));
+
   data = {};
   save();
   renderAll();
 }
 
-function setAdmin() {
-  // ya no se usa (lo puedes borrar del HTML)
+function restoreMonth() {
+  if (!isAdmin()) return;
+
+  if (!backup) return alert("No hay backup");
+
+  data = structuredClone(backup);
+  save();
+  renderAll();
 }
 
-function getDayType(day) {
-  const d = new Date(year, month, day).getDay();
-  if (d === 0) return "domingo";
-  if (d === 6) return "sabado";
-  if (d === 5) return "viernes";
-  if (d === 1) return "lunes";
-  return "normal";
+/* =========================
+   SAVE
+========================= */
+
+function save() {
+  localStorage.setItem("guardias", JSON.stringify(data));
 }
 
-function hasSenior(shifts) {
-  return shifts.some(s => s.level === "R3" || s.level === "R4");
-}
+/* =========================
+   INPUT FILTER (days)
+========================= */
 
-/* ======================
+document.addEventListener("input", (e) => {
+  if (e.target.id === "days") {
+    e.target.value = e.target.value.replace(/[^0-9,]/g, "");
+  }
+});
+
+/* =========================
    CALENDAR
-====================== */
+========================= */
 
 function renderCalendar() {
   calendarGrid.innerHTML = "";
+
   const days = new Date(year, month + 1, 0).getDate();
 
   for (let i = 1; i <= days; i++) {
     const dayDiv = document.createElement("div");
     dayDiv.className = "day";
-    dayDiv.dataset.day = i;
 
     const shifts = data[i] || [];
-
-    let conflict = false;
-
-    let max = 2;
-    if (getDayType(i) === "domingo" || getDayType(i) === "sabado") {
-      max = 3;
-    }
-
-    if (shifts.length > max) conflict = true;
-    if (shifts.length >= 2 && !hasSenior(shifts)) conflict = true;
 
     dayDiv.innerHTML = `<div class="day-number">${i}</div>`;
 
     shifts.forEach((s, index) => {
       const div = document.createElement("div");
+      div.className = "shift suggested";
 
-      let cls = "suggested";
-      if (conflict) cls = "conflict";
-      if (s.status === "confirmed") cls = "confirmed";
-
-      div.className = "shift " + cls;
-      div.draggable = isAdmin();
       div.innerText = `${s.name} (${s.level})`;
 
       if (isAdmin()) {
-        div.addEventListener("dblclick", () => {
-          if (!confirm("Eliminar guardia?")) return;
+        div.ondblclick = () => {
+          if (!confirm("Eliminar?")) return;
           data[i].splice(index, 1);
           save();
           renderAll();
-        });
+        };
       }
 
-      div.addEventListener("dragstart", e => {
-        e.dataTransfer.setData("text", JSON.stringify({ day: i, index }));
-      });
-
       dayDiv.appendChild(div);
-    });
-
-    dayDiv.addEventListener("dragover", e => {
-      if (!isAdmin()) return;
-      e.preventDefault();
-      dayDiv.classList.add("drag-over");
-    });
-
-    dayDiv.addEventListener("dragleave", () => {
-      dayDiv.classList.remove("drag-over");
-    });
-
-    dayDiv.addEventListener("drop", e => {
-      if (!isAdmin()) return;
-
-      e.preventDefault();
-      dayDiv.classList.remove("drag-over");
-
-      const targetDay = parseInt(dayDiv.dataset.day);
-
-      const { day, index } = JSON.parse(e.dataTransfer.getData("text"));
-      const item = data[day][index];
-
-      data[day].splice(index, 1);
-
-      if (!data[targetDay]) data[targetDay] = [];
-      data[targetDay].push(item);
-
-      save();
-      renderAll();
     });
 
     calendarGrid.appendChild(dayDiv);
   }
 }
 
-/* ======================
-   OTHER FUNCTIONS
-====================== */
-
-function confirmAll() {
-  if (!isAdmin()) return;
-
-  Object.keys(data).forEach(d => {
-    data[d].forEach(s => s.status = "confirmed");
-  });
-
-  save();
-  renderAll();
-}
+/* =========================
+   PROPOSAL
+========================= */
 
 function submitProposal() {
-  const name = document.getElementById("name").value;
+  const name = username;
   const level = document.getElementById("level").value;
   const num = parseInt(document.getElementById("numShifts").value);
 
   const days = document.getElementById("days").value
     .split(",")
     .map(d => parseInt(d.trim()))
-    .filter(d => d >= 1 && d <= 31);
-
-  if (!name) {
-    alert("Introduce nombre");
-    return;
-  }
+    .filter(Boolean);
 
   if (days.length !== num) {
-    alert("Número de días incorrecto");
-    return;
-  }
-
-  let premium = 0;
-  days.forEach(d => {
-    const t = getDayType(d);
-    if (t === "domingo" || t === "sabado") premium++;
-  });
-
-  if (premium === days.length) {
-    alert("No puedes elegir solo días premium");
-    return;
+    return alert("Número de días incorrecto");
   }
 
   days.forEach(d => {
@@ -224,13 +192,12 @@ function submitProposal() {
   save();
   renderAll();
 
-  document.getElementById("name").value = "";
   document.getElementById("days").value = "";
 }
 
-/* ======================
-   UI
-====================== */
+/* =========================
+   USERS
+========================= */
 
 function renderUsers() {
   userList.innerHTML = "";
@@ -238,43 +205,21 @@ function renderUsers() {
   const users = {};
 
   Object.values(data).forEach(day => {
-    day.forEach(u => {
-      users[u.name] = u.level;
-    });
+    day.forEach(u => users[u.name] = u.level);
   });
 
-  Object.keys(users).forEach(name => {
+  Object.keys(users).forEach(u => {
     const div = document.createElement("div");
-    div.innerText = `${name} (${users[name]})`;
+    div.innerText = `${u} (${users[u]})`;
     userList.appendChild(div);
   });
 }
 
-function renderAdminPanel() {
-  document.getElementById("adminPanel").style.display =
-    isAdmin() ? "block" : "none";
-}
-
-function renderMonthTitle() {
-  const months = [
-    "Enero","Febrero","Marzo","Abril","Mayo","Junio",
-    "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
-  ];
-
-  document.getElementById("monthTitle").innerText =
-    months[month] + " " + year;
-}
+/* =========================
+   MAIN
+========================= */
 
 function renderAll() {
-  renderMonthTitle();
   renderCalendar();
   renderUsers();
-  renderAdminPanel();
 }
-
-/* INIT */
-if (role) {
-  document.getElementById("loginScreen").style.display = "none";
-}
-
-renderAll();

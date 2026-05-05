@@ -78,3 +78,52 @@ button {
   align-items: center;
   gap: 10px;
 }
+.hidden { display: none; }
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: #f4f6f9;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-card {
+  background: white;
+  padding: 30px;
+  border-radius: 16px;
+  width: 320px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.login-card input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+
+.login-card button {
+  width: 100%;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.topbar {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+#roleBadge {
+  padding: 5px 10px;
+  border-radius: 8px;
+  color: white;
+  font-weight: bold;
+}
+
+.admin { background: green; }
+.user { background: gray; }

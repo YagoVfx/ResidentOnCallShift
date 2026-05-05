@@ -5,35 +5,52 @@
   <title>Guardias MIR</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+    
+    <body>
 
-<div id="loginScreen" class="login">
-  <h2>Guardias MIR</h2>
+<div id="loginScreen" class="login-overlay">
 
-  <button onclick="enterUser()">Entrar como usuario</button>
+  <div class="login-card">
+    <h2>Guardias MIR</h2>
 
-  <hr>
+    <p class="subtitle">¿Eres el administrador de este mes?</p>
 
-  <input id="adminLoginName" placeholder="Nombre admin (R3 o R4)">
-  <button onclick="enterAdmin()">Entrar como administrador</button>
+    <hr>
+
+    <h3>Usuario normal</h3>
+    <input id="userNameLogin" placeholder="Tu nombre">
+
+    <button onclick="loginUser()">Entrar como usuario</button>
+
+    <hr>
+
+    <h3>Administrador</h3>
+    <input id="adminNameLogin" placeholder="Nombre admin (R3/R4)">
+    
+    <button onclick="loginAdmin()">Entrar como administrador</button>
+  </div>
+
 </div>
 
-<div class="container">
-  
-  <!-- CALENDARIO -->
+<!-- HEADER STATUS -->
+<div id="topBar" class="topbar hidden">
+  <span id="roleBadge"></span>
+  <button onclick="logout()">Cerrar sesión</button>
+</div>
+
+<div class="container hidden" id="app">
+
   <div class="calendar">
     <h2 id="monthTitle"></h2>
     <div id="calendarGrid"></div>
   </div>
 
-  <!-- PANEL DERECHO -->
   <div class="sidebar">
+
     <h3>Proponer guardias</h3>
 
-    <label>Nombre</label>
-    <input id="name" placeholder="Ej: Juan">
+    <input id="name" disabled>
 
-    <label>Nivel</label>
     <select id="level">
       <option>R1</option>
       <option>R2</option>
@@ -41,32 +58,25 @@
       <option>R4</option>
     </select>
 
-    <label>Nº guardias</label>
     <input id="numShifts" type="number" min="2" max="4" value="2">
 
-    <label>Días (separados por coma)</label>
     <input id="days" placeholder="1,5,12">
 
     <button onclick="submitProposal()">Enviar propuesta</button>
-	
-	<hr>
 
-	<button onclick="resetMonth()">Reset mes</button>
+    <hr>
 
-	<h3>Modo administrador</h3>
-	<input id="adminName" placeholder="Tu nombre (R3)">
-	<button onclick="setAdmin()">Entrar como admin</button>
-
-	<div id="adminPanel" style="display:none;">
-	  <button onclick="confirmAll()">Confirmar mes (verde)</button>
-	</div>
+    <button id="resetBtn" onclick="resetMonth()">Reset mes</button>
+    <button id="restoreBtn" onclick="restoreMonth()">Restaurar mes</button>
 
     <h3>Usuarios</h3>
     <div id="userList"></div>
+
   </div>
 
 </div>
 
 <script src="app.js"></script>
 </body>
+    
 </html>
