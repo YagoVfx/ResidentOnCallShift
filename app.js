@@ -25,8 +25,9 @@ function setAdmin() {
   renderAll();
 }
 
-function isAdmin() {
-  return admin !== null;
+if (!name) {
+  alert("Introduce un nombre");
+  return;
 }
 
 function getDayType(day) {
@@ -56,7 +57,12 @@ function renderCalendar() {
     // VALIDACIÓN
     let conflict = false;
 
-    if (shifts.length > 3) conflict = true;
+    let max = 2;
+    if (getDayType(i) === "domingo" || getDayType(i) === "sabado") {
+      max = 3;
+    }
+
+    if (shifts.length > max) conflict = true;
     if (shifts.length >= 2 && !hasSenior(shifts)) conflict = true;
 
     dayDiv.innerHTML = `<div class="day-number">${i}</div>`;
@@ -72,6 +78,16 @@ function renderCalendar() {
       div.draggable = isAdmin();
 
       div.innerText = `${s.name} (${s.level})`;
+
+        // ELIMINAR (DOBLE CLICK - SOLO ADMIN)
+      if (isAdmin()) {
+        div.addEventListener("dblclick", () => {
+          if (!confirm("Eliminar guardia?")) return;
+          data[i].splice(index, 1);
+          save();
+          renderAll();
+        });
+      }
 
       // DRAG
       div.addEventListener("dragstart", e => {
@@ -131,7 +147,10 @@ function submitProposal() {
   const name = document.getElementById("name").value;
   const level = document.getElementById("level").value;
   const num = parseInt(document.getElementById("numShifts").value);
-  const days = document.getElementById("days").value.split(",").map(d => parseInt(d));
+  const days = document.getElementById("days").value
+  .split(",")
+  .map(d => parseInt(d.trim()))
+  .filter(d => d >= 1 && d <= 31);
 
   if (days.length !== num) {
     alert("Número de días incorrecto");
@@ -158,9 +177,11 @@ function submitProposal() {
       status: "suggested"
     });
   });
-
+  
   save();
   renderAll();
+  document.getElementById("name").value = "";
+  document.getElementById("days").value = "";
 }
 
 function renderUsers() {
@@ -185,10 +206,17 @@ function renderAdminPanel() {
   document.getElementById("adminPanel").style.display = isAdmin() ? "block" : "none";
 }
 
+function renderMonthTitle() {
+  const months = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  document.getElementById("monthTitle").innerText = months[month] + " " + year;
+}
+
 function renderAll() {
+  renderMonthTitle();
   renderCalendar();
   renderUsers();
   renderAdminPanel();
+
 }
 
 renderAll();
