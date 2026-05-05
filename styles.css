@@ -67,3 +67,14 @@ button {
 .day.drag-over {
   outline: 2px dashed #1890ff;
 }
+
+.login {
+  position: fixed;
+  inset: 0;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
