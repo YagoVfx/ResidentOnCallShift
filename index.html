@@ -1,91 +1,251 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Guardias MIR</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GuardiasMIR — Gestión de Guardias</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
 </head>
-
 <body>
 
-<!-- LOGIN -->
-<div id="loginScreen" class="login-overlay">
-
+<!-- ===================== LOGIN SCREEN ===================== -->
+<div id="login-screen" class="login-screen">
   <div class="login-card">
-    <h2>Guardias MIR</h2>
-
-    <p>¿Eres el administrador de este mes?</p>
-
-    <hr>
-
-    <h3>Usuario normal</h3>
-    <input id="userNameLogin" placeholder="Tu nombre">
-    <button onclick="loginUser()" style="background:#1890ff; font-weight:bold;">
-  Entrar como usuario
-</button>
-
-    <hr>
-
-    <h3>Administrador</h3>
-    <input id="adminNameLogin" placeholder="Nombre admin">
-    <button onclick="loginAdmin()">Entrar como administrador</button>
-
-  </div>
-
-</div>
-
-<!-- TOP BAR -->
-<div id="topBar" class="topbar hidden">
-  <span id="roleBadge"></span>
-  <button onclick="logout()">Cerrar sesión</button>
-  <div id="devPanel" class="hidden">
-  <button onclick="switchUser('user1')">Ana</button>
-  <button onclick="switchUser('user2')">Luis</button>
-  <button onclick="switchUser('user3')">Marta (Admin)</button>
-</div>
-</div>
-
-<!-- APP -->
-<div id="app" class="hidden">
-
-  <div class="container">
-
-    <div class="calendar">
-      <h2 id="monthTitle"></h2>
-      <div id="calendarGrid"></div>
+    <div class="login-logo">
+      <span class="logo-icon">🏥</span>
+      <h1 class="logo-title">GuardiasMIR</h1>
+      <p class="logo-sub">Sistema de gestión de guardias</p>
     </div>
 
-    <div class="sidebar">
-
-      <h3>Proponer guardias</h3>
-
-      <input id="name" disabled>
-
-      <select id="level">
-        <option>R1</option>
-        <option>R2</option>
-        <option>R3</option>
-        <option>R4</option>
-      </select>
-
-      <input id="numShifts" type="number" min="2" max="4" value="2">
-
-      <input id="days" placeholder="1,5,12">
-
-      <button onclick="submitProposal()">Enviar propuesta</button>
-
-      <hr>
-
-      <button id="resetBtn" onclick="resetMonth()">Reset mes</button>
-      <button id="restoreBtn" onclick="restoreMonth()">Restaurar mes</button>
-
-      <h3>Usuarios</h3>
-      <div id="userList"></div>
-
+    <div class="login-tabs" id="login-tabs-bar">
+      <button class="tab-btn active" data-tab="user">Usuario</button>
+      <button class="tab-btn" data-tab="admin">Administrador</button>
     </div>
 
-  </div>
+    <!-- Tab Usuario -->
+    <div id="tab-user" class="tab-content active">
+      <div class="form-group">
+        <label>Nombre completo</label>
+        <input type="text" id="login-user-name" placeholder="Tu nombre completo" autocomplete="off"/>
+      </div>
+      <div class="form-group">
+        <label>Nivel MIR</label>
+        <select id="login-user-level">
+          <option value="">Selecciona nivel</option>
+          <option value="R1">R1</option>
+          <option value="R2">R2</option>
+          <option value="R3">R3</option>
+          <option value="R4">R4</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="btn-login-user">Entrar como Usuario</button>
+    </div>
 
+    <!-- Tab Administrador -->
+    <div id="tab-admin" class="tab-content">
+      <div class="form-group">
+        <label>Nombre de administrador</label>
+        <input type="text" id="login-admin-name" placeholder="Nombre del admin" autocomplete="off"/>
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="login-admin-pass" placeholder="••••••••" autocomplete="off"/>
+      </div>
+      <button class="btn-primary" id="btn-login-admin">Entrar como Admin</button>
+    </div>
+
+    <!-- Tab DEV (oculto, triple clic esquina inferior derecha) -->
+    <div id="tab-dev" class="tab-content tab-dev-hidden">
+      <div class="dev-panel-header">
+        <span class="dev-badge-label">⚡ DEV MODE</span>
+        <span class="dev-panel-hint">Solo visible en entorno de pruebas</span>
+      </div>
+
+      <button class="btn-dev-enter" id="btn-login-dev">Entrar como DEV</button>
+
+      <div class="dev-divider">Cambiar a usuario existente</div>
+      <div id="dev-login-users-list" class="dev-login-users-list"></div>
+
+      <div class="dev-divider">Crear usuario rápido</div>
+      <div class="dev-quick-create">
+        <input type="text" id="dev-quick-name" placeholder="Nombre" class="dev-input"/>
+        <select id="dev-quick-level" class="dev-input">
+          <option value="R1">R1</option>
+          <option value="R2">R2</option>
+          <option value="R3">R3</option>
+          <option value="R4">R4</option>
+        </select>
+        <select id="dev-quick-rol" class="dev-input">
+          <option value="user">Usuario</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button class="btn-dev-create-quick" id="btn-dev-quick-create">+ Crear y entrar</button>
+      </div>
+    </div>
+
+    <!-- Hotspot DEV invisible (esquina inferior derecha) -->
+    <div id="dev-trigger" class="dev-trigger"></div>
+
+    <div id="login-error" class="login-error"></div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app" class="app hidden">
+
+  <header class="topbar">
+    <div class="topbar-brand">🏥 <span>GuardiasMIR</span></div>
+    <div class="topbar-right">
+      <span id="topbar-rol" class="topbar-rol"></span>
+      <span id="topbar-user" class="topbar-user"></span>
+      <button class="btn-logout" id="btn-logout">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <div class="main-layout">
+
+    <!-- CALENDARIO -->
+    <main class="calendar-area">
+      <div class="calendar-header">
+        <button class="cal-nav" id="btn-prev">‹</button>
+        <h2 id="calendar-title"></h2>
+        <button class="cal-nav" id="btn-next">›</button>
+      </div>
+      <div class="weekdays-header">
+        <div>Lun</div><div>Mar</div><div>Mié</div>
+        <div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+
+      <div id="pdf-section" class="pdf-section hidden">
+        <button class="btn-pdf" id="btn-export-pdf">📄 Exportar PDF del mes aprobado</button>
+      </div>
+    </main>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <!-- Formulario propuesta -->
+      <div class="sidebar-card" id="form-card">
+        <h3 class="sidebar-title">📝 Proponer guardia</h3>
+
+        <div id="form-deadline-warning" class="alert-box alert-orange hidden">
+          ⚠️ Fuera de plazo. Las propuestas del mes siguiente solo se aceptan del día 1 al 15 del mes actual.
+        </div>
+        <div id="form-current-month-info" class="alert-box alert-blue hidden">
+          📅 Estás viendo el mes actual. Propón guardias directamente.
+        </div>
+
+        <div id="form-body">
+          <div class="form-group">
+            <label>Nombre</label>
+            <input type="text" id="prop-name" readonly/>
+          </div>
+          <div class="form-group">
+            <label>Nivel</label>
+            <input type="text" id="prop-level" readonly/>
+          </div>
+          <div class="form-group">
+            <label>Nº de guardias <span class="label-hint">(máx 5)</span></label>
+            <input type="number" id="prop-count" min="1" max="5" placeholder="Entre 1 y 5"/>
+          </div>
+          <div class="form-group">
+            <label>Días <span class="label-hint">(solo números, separados por comas)</span></label>
+            <input type="text" id="prop-days" placeholder="Ej: 3, 10, 17" autocomplete="off" inputmode="numeric"/>
+            <div id="prop-days-warning" class="prop-warning"></div>
+          </div>
+          <button class="btn-primary" id="btn-submit-prop">Proponer guardias</button>
+        </div>
+      </div>
+
+      <!-- Admin: Acciones -->
+      <div class="sidebar-card hidden" id="admin-card">
+        <h3 class="sidebar-title">⚙️ Administración</h3>
+        <div class="admin-actions">
+          <button class="btn-admin" id="btn-approve">✅ Aprobar mes visible</button>
+          <button class="btn-admin btn-warn" id="btn-reset">🗑️ Resetear mes visible</button>
+          <button class="btn-admin" id="btn-restore">♻️ Restaurar backup</button>
+        </div>
+        <div id="admin-status" class="admin-status"></div>
+      </div>
+
+      <!-- DEV: Panel gestión -->
+      <div class="sidebar-card hidden" id="dev-card">
+        <h3 class="sidebar-title">⚡ DEV — Gestión</h3>
+
+        <div class="dev-toggle-row">
+          <span class="dev-toggle-label">Permitir propuestas R1/R2</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-r1r2"/>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="dev-divider" style="margin:14px 0 10px">Crear usuario</div>
+        <div class="form-group">
+          <label>Nombre</label>
+          <input type="text" id="dev-new-name" placeholder="Nombre completo"/>
+        </div>
+        <div class="form-group">
+          <label>Nivel</label>
+          <select id="dev-new-level">
+            <option value="R1">R1</option>
+            <option value="R2">R2</option>
+            <option value="R3">R3</option>
+            <option value="R4">R4</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Rol</label>
+          <select id="dev-new-rol">
+            <option value="user">Usuario</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+        <button class="btn-primary" id="btn-dev-create">Crear usuario</button>
+
+        <div class="dev-divider" style="margin:14px 0 10px">Cambiar sesión</div>
+        <div id="dev-user-switch-list" class="dev-switch-list"></div>
+      </div>
+
+      <!-- Lista usuarios (admin + dev) -->
+      <div class="sidebar-card hidden" id="users-card">
+        <div class="users-card-header">
+          <h3 class="sidebar-title" style="margin-bottom:0">👥 Usuarios registrados</h3>
+          <span id="users-count-badge" class="users-count-badge">0</span>
+        </div>
+        <div id="users-list" class="users-list"></div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<!-- ===================== MODAL DÍA ===================== -->
+<div id="day-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="modal-day-title">Guardias del día</h3>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+
+    <div id="modal-guards-list" class="modal-guards-list"></div>
+
+    <!-- Añadir guardia manualmente (solo admin/dev) -->
+    <div id="modal-add-guard-section" class="modal-add-section hidden">
+      <div class="modal-add-title">➕ Añadir guardia manualmente</div>
+      <div class="modal-add-row">
+        <select id="modal-add-user" class="modal-select">
+          <option value="">— Selecciona usuario —</option>
+        </select>
+        <button class="btn-modal-add" id="btn-modal-add-guard">Añadir</button>
+      </div>
+      <div id="modal-add-warning" class="prop-warning" style="margin-top:6px"></div>
+    </div>
+
+    <p id="modal-hint" class="modal-hint"></p>
+  </div>
 </div>
 
 <script src="app.js"></script>
