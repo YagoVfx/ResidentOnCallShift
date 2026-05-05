@@ -59,16 +59,13 @@ function startApp() {
   const app = document.getElementById("app");
   const topbar = document.getElementById("topBar");
 
-  if (!login || !app || !topbar) {
-    console.error("Falta un elemento del DOM:", {
-      login, app, topbar
-    });
-    return;
-  }
+  login.style.display = "none";
 
-  login.classList.add("hidden");
   app.classList.remove("hidden");
   topbar.classList.remove("hidden");
+
+  // 🔥 IMPORTANTE: fuerza layout correcto
+  app.style.display = "block";
 
   document.getElementById("name").value = username;
   document.getElementById("name").disabled = true;

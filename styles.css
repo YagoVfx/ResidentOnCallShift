@@ -7,6 +7,7 @@ body {
 .container {
   display: flex;
   height: 100vh;
+  width: 100%;
 }
 
 .calendar {
@@ -78,7 +79,9 @@ button {
   align-items: center;
   gap: 10px;
 }
-.hidden { display: none; }
+.hidden {
+  display: none !important;
+}
 
 .login-overlay {
   position: fixed;
@@ -127,3 +130,7 @@ button {
 
 .admin { background: green; }
 .user { background: gray; }
+#app {
+  width: 100%;
+  height: 100vh;
+}
