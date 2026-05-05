@@ -63,3 +63,7 @@ button {
   border: none;
   cursor: pointer;
 }
+
+.day.drag-over {
+  outline: 2px dashed #1890ff;
+}
