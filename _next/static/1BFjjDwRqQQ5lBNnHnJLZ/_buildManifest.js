@@ -1,13 +1,18 @@
 self.__BUILD_MANIFEST = {
   "/": [
-    "static/chunks/0_qlbvpo2y6tk.js"
+    "static/chunks/0dzfi8kuz5pwn.js"
   ],
   "/_error": [
-    "static/chunks/0t5y6spiv6e7g.js"
+    "static/chunks/0vbyeva8sjav2.js"
   ],
   "__rewrites": {
     "afterFiles": [],
-    "beforeFiles": [],
+    "beforeFiles": [
+      {
+        "source": "/ResidentOnCallShift//_next/:path+",
+        "destination": "/ResidentOnCallShift/_next/:path+"
+      }
+    ],
     "fallback": []
   },
   "sortedPages": [
