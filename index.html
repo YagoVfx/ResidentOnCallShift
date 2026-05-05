@@ -20,7 +20,9 @@
 
     <h3>Usuario normal</h3>
     <input id="userNameLogin" placeholder="Tu nombre">
-    <button onclick="loginUser()">Entrar como usuario</button>
+    <button onclick="loginUser()" style="background:#1890ff; font-weight:bold;">
+  Entrar como usuario
+</button>
 
     <hr>
 
@@ -36,6 +38,11 @@
 <div id="topBar" class="topbar hidden">
   <span id="roleBadge"></span>
   <button onclick="logout()">Cerrar sesión</button>
+  <div id="devPanel" class="hidden">
+  <button onclick="switchUser('user1')">Ana</button>
+  <button onclick="switchUser('user2')">Luis</button>
+  <button onclick="switchUser('user3')">Marta (Admin)</button>
+</div>
 </div>
 
 <!-- APP -->

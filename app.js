@@ -1,6 +1,15 @@
 window.onerror = function(msg, src, line) {
   alert("ERROR JS: " + msg + " (" + line + ")");
 };
+
+const DEV_MODE = true;
+
+const DEV_USERS = {
+  user1: { name: "Ana", role: "user" },
+  user2: { name: "Luis", role: "user" },
+  user3: { name: "Marta", role: "admin" }
+};
+
 let data = JSON.parse(localStorage.getItem("guardias")) || {};
 let backup = JSON.parse(localStorage.getItem("guardias_backup")) || null;
 
@@ -18,38 +27,51 @@ const month = 4;
 ========================= */
 
 function loginUser() {
-  username = document.getElementById("userNameLogin").value.trim();
-
-  if (!username) {
-    alert("Introduce nombre");
+  if (DEV_MODE) {
+    username = DEV_USERS.user1.name;
+    role = DEV_USERS.user1.role;
+    startApp();
     return;
   }
 
-  console.log("LOGIN USER OK:", username);
+  username = document.getElementById("userNameLogin").value.trim();
+  if (!username) return alert("Introduce nombre");
 
   role = "user";
   startApp();
 }
 
 function loginAdmin() {
-  const name = document.getElementById("adminNameLogin").value.trim();
-
-  if (!name) {
-    alert("Introduce admin");
+  if (DEV_MODE) {
+    username = DEV_USERS.user3.name;
+    role = DEV_USERS.user3.role;
+    startApp();
     return;
   }
 
-  console.log("LOGIN ADMIN OK:", name);
+  const name = document.getElementById("adminNameLogin").value.trim();
+  if (!name) return alert("Introduce admin");
 
   username = name;
   role = "admin";
-
   startApp();
 }
 
 function logout() {
   localStorage.clear();
   location.reload();
+}
+
+function switchUser(devKey) {
+  if (!DEV_MODE) return;
+
+  username = DEV_USERS[devKey].name;
+  role = DEV_USERS[devKey].role;
+
+  document.getElementById("name").value = username;
+
+  setupUI();
+  renderAll();
 }
 
 function startApp() {
@@ -59,19 +81,22 @@ function startApp() {
   const app = document.getElementById("app");
   const topbar = document.getElementById("topBar");
 
-  login.style.display = "none";
-
+  login.classList.add("hidden");
   app.classList.remove("hidden");
   topbar.classList.remove("hidden");
 
-  // 🔥 IMPORTANTE: fuerza layout correcto
-  app.style.display = "block";
-
-  document.getElementById("name").value = username;
-  document.getElementById("name").disabled = true;
+  const nameInput = document.getElementById("name");
+  if (nameInput) {
+    nameInput.value = username;
+    nameInput.disabled = true;
+  }
 
   setupUI();
   renderAll();
+
+  if (DEV_MODE) {
+    document.getElementById("devPanel").style.display = "flex";
+  }
 }
 
 /* =========================
@@ -94,6 +119,7 @@ function setupUI() {
     document.getElementById("resetBtn").style.display = "none";
     document.getElementById("restoreBtn").style.display = "none";
   }
+  
 }
 
 function isAdmin() {
@@ -241,3 +267,5 @@ function renderAll() {
   renderCalendar();
   renderUsers();
 }
+
+

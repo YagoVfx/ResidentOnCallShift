@@ -119,6 +119,7 @@ button {
   display: flex;
   gap: 10px;
   align-items: center;
+  display: flex;
 }
 
 #roleBadge {
@@ -133,4 +134,5 @@ button {
 #app {
   width: 100%;
   height: 100vh;
+  display: flex;
 }
