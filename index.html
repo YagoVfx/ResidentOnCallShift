@@ -9,6 +9,24 @@
 </head>
 <body>
 
+<!-- ==================== AVISO BIENVENIDA (overlay) ==================== -->
+<div id="welcome-overlay" class="welcome-overlay hidden">
+  <div class="welcome-card">
+    <div class="welcome-icon">📋</div>
+    <h2 class="welcome-title">Bienvenido/a, <span id="welcome-name"></span></h2>
+    <div class="welcome-body">
+      <p>Recuerda las normas para proponer guardias:</p>
+      <ul>
+        <li>📅 Las propuestas para el <strong>mes siguiente</strong> se abren el <strong>día 1</strong> del mes actual.</li>
+        <li>⏰ El plazo cierra el <strong>día 15 a las 00:00</strong> del mes en curso.</li>
+        <li>✏️ Puedes eliminar tus propias guardias si necesitas rectificar.</li>
+        <li>✅ Una vez el administrador aprueba el mes, el calendario queda bloqueado.</li>
+      </ul>
+    </div>
+    <button class="btn-primary" id="btn-welcome-close">Entendido</button>
+  </div>
+</div>
+
 <!-- ==================== LOGIN ==================== -->
 <div id="login-screen" class="login-screen">
   <div class="login-card">
@@ -18,13 +36,12 @@
       <p class="logo-sub">Identifícate para continuar</p>
     </div>
 
-    <!-- Pantalla única: solo nombre + nivel -->
     <div id="login-main" class="login-main">
       <div class="form-group">
         <label>Tu nombre completo</label>
         <input type="text" id="login-name" placeholder="Nombre y apellidos" autocomplete="off"/>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="login-level-group">
         <label>Nivel MIR</label>
         <select id="login-level">
           <option value="">Selecciona nivel</option>
@@ -34,32 +51,33 @@
           <option value="R4">R4</option>
         </select>
       </div>
-      <button class="btn-primary" id="btn-login-user">Entrar</button>
-      <p class="login-hint">Si eres administrador, introduce tu nombre y contraseña aparecerá automáticamente.</p>
-      <!-- Campo pass oculto que aparece si el nombre coincide con un admin -->
-      <div id="login-admin-pass-group" class="form-group hidden" style="margin-top:10px">
+      <div class="form-group hidden" id="login-admin-pass-group">
         <label>Contraseña de administrador</label>
         <input type="password" id="login-pass" placeholder="••••••••" autocomplete="off"/>
       </div>
+      <button class="btn-primary" id="btn-login-user">Entrar</button>
+      <p class="login-hint">Si eres administrador, el campo de contraseña aparecerá al escribir tu nombre.</p>
     </div>
 
-    <!-- DEV panel (triple clic esquina) -->
+    <!-- DEV panel (triple clic esquina inferior derecha) -->
     <div id="tab-dev" class="tab-dev-hidden">
       <div class="dev-panel-header">
         <span class="dev-badge-label">⚡ DEV MODE</span>
         <span class="dev-panel-hint">Solo entorno de pruebas</span>
       </div>
       <button class="btn-dev-enter" id="btn-login-dev">Entrar como DEV</button>
+
       <div class="dev-divider">Simular día del mes</div>
       <div class="dev-date-row">
-        <label class="dev-small-label">Día simulado</label>
-        <input type="number" id="dev-fake-day" min="1" max="31" placeholder="Día (1-31)" class="dev-input" style="width:100px"/>
+        <input type="number" id="dev-fake-day" min="1" max="31" placeholder="Día (1-31)" class="dev-input"/>
         <button class="btn-dev-apply-date" id="btn-dev-apply-date">Aplicar</button>
         <button class="btn-dev-reset-date" id="btn-dev-reset-date">Reset</button>
       </div>
       <div id="dev-fake-day-status" class="dev-fake-status"></div>
+
       <div class="dev-divider">Cambiar a usuario existente</div>
       <div id="dev-login-users-list" class="dev-login-users-list"></div>
+
       <div class="dev-divider">Crear usuario rápido</div>
       <div class="dev-quick-create">
         <input type="text" id="dev-quick-name" placeholder="Nombre" class="dev-input"/>
@@ -105,9 +123,8 @@
         <div>Lun</div><div>Mar</div><div>Mié</div>
         <div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
       </div>
-      <!-- Hint drag/drop solo admin/dev -->
       <div id="cal-hint" class="cal-hint hidden">
-        💡 Arrastra un nombre a otro día para moverlo. Doble clic en una casilla para añadir guardia.
+        💡 <strong>Admin:</strong> arrastra un nombre para moverlo · clic en <strong>＋</strong> para añadir · <strong>✕</strong> para eliminar
       </div>
       <div class="calendar-grid" id="calendar-grid"></div>
       <div id="pdf-section" class="pdf-section hidden">
@@ -147,9 +164,30 @@
         </div>
       </div>
 
-      <!-- Admin -->
+      <!-- Admin: Acciones -->
       <div class="sidebar-card hidden" id="admin-card">
         <h3 class="sidebar-title">⚙️ Administración</h3>
+
+        <!-- Añadir usuario manualmente -->
+        <div class="admin-add-user-section">
+          <p class="admin-add-user-label">Añadir usuario al sistema</p>
+          <div class="form-group" style="margin-bottom:8px">
+            <input type="text" id="admin-new-name" placeholder="Nombre completo"/>
+          </div>
+          <div class="admin-add-row">
+            <select id="admin-new-level" class="admin-select">
+              <option value="R1">R1</option>
+              <option value="R2">R2</option>
+              <option value="R3">R3</option>
+              <option value="R4">R4</option>
+            </select>
+            <button class="btn-admin-add-user" id="btn-admin-add-user">+ Añadir</button>
+          </div>
+          <div id="admin-add-user-warning" class="prop-warning" style="margin-top:4px"></div>
+        </div>
+
+        <div class="admin-divider"></div>
+
         <div class="admin-actions">
           <button class="btn-admin" id="btn-approve">✅ Aprobar mes visible</button>
           <button class="btn-admin btn-warn" id="btn-reset">🗑️ Resetear mes visible</button>
@@ -158,10 +196,9 @@
         <div id="admin-status" class="admin-status"></div>
       </div>
 
-      <!-- DEV -->
+      <!-- DEV: Panel gestión -->
       <div class="sidebar-card hidden" id="dev-card">
         <h3 class="sidebar-title">⚡ DEV — Restricciones</h3>
-
         <div class="dev-toggles-list">
 
           <div class="dev-toggle-row">
@@ -178,7 +215,7 @@
           <div class="dev-toggle-row">
             <div class="dev-toggle-info">
               <span class="dev-toggle-label">Requerir mezcla R3/R4 + R1/R2</span>
-              <span class="dev-toggle-hint">Obliga combinación de niveles</span>
+              <span class="dev-toggle-hint">Combinación obligatoria</span>
             </div>
             <label class="toggle-switch">
               <input type="checkbox" id="toggle-level-mix" checked/>
@@ -188,7 +225,7 @@
 
           <div class="dev-toggle-row">
             <div class="dev-toggle-info">
-              <span class="dev-toggle-label">Límite 2 personas entre semana</span>
+              <span class="dev-toggle-label">Límite 2 entre semana</span>
               <span class="dev-toggle-hint">Mar–Vie máx 2</span>
             </div>
             <label class="toggle-switch">
@@ -232,7 +269,7 @@
 
           <div class="dev-toggle-row">
             <div class="dev-toggle-info">
-              <span class="dev-toggle-label">Plazo propuestas mes siguiente</span>
+              <span class="dev-toggle-label">Plazo día 15 activo</span>
               <span class="dev-toggle-hint">Bloquear tras día 15</span>
             </div>
             <label class="toggle-switch">
@@ -276,7 +313,7 @@
         <div id="dev-user-switch-list" class="dev-switch-list"></div>
       </div>
 
-      <!-- Usuarios (admin+dev) -->
+      <!-- Usuarios (admin + dev) -->
       <div class="sidebar-card hidden" id="users-card">
         <div class="users-card-header">
           <h3 class="sidebar-title" style="margin-bottom:0">👥 Usuarios registrados</h3>
@@ -289,25 +326,25 @@
   </div>
 </div>
 
-<!-- ==================== MODAL AÑADIR GUARDIA (doble clic) ==================== -->
+<!-- ==================== MODAL AÑADIR GUARDIA (clic en +) ==================== -->
 <div id="add-modal" class="modal-overlay hidden">
-  <div class="modal-card" style="max-width:360px">
+  <div class="modal-card" style="max-width:380px">
     <div class="modal-header">
       <h3 id="add-modal-title">Añadir guardia</h3>
       <button class="modal-close" id="add-modal-close">✕</button>
     </div>
-    <div class="form-group" style="margin-top:4px">
+    <div class="form-group" style="margin-top:6px">
       <label>Usuario</label>
       <select id="add-modal-user" class="modal-select">
         <option value="">— Selecciona —</option>
       </select>
     </div>
-    <div id="add-modal-warning" class="prop-warning" style="margin-bottom:8px"></div>
+    <div id="add-modal-warning" class="prop-warning" style="margin-bottom:10px"></div>
     <button class="btn-primary" id="btn-add-modal-confirm">Añadir guardia</button>
   </div>
 </div>
 
-<!-- ==================== DRAG GHOST ==================== -->
+<!-- Ghost drag -->
 <div id="drag-ghost" class="drag-ghost hidden"></div>
 
 <script src="app.js"></script>

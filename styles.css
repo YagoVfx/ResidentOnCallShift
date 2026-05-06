@@ -1,5 +1,5 @@
 /* =============================================
-   GUARDIAS MIR — STYLES v3
+   GUARDIAS MIR — STYLES v4
    ============================================= */
 
 :root {
@@ -38,6 +38,63 @@ body {
   line-height: 1.5;
 }
 
+/* ===== WELCOME OVERLAY ===== */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  backdrop-filter: blur(6px);
+}
+.welcome-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 32px 36px;
+  max-width: 440px;
+  width: 92%;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.welcome-icon { font-size: 40px; margin-bottom: 12px; display: block; }
+.welcome-title {
+  font-family: var(--font-title);
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 18px;
+  color: var(--text);
+}
+.welcome-title span { color: var(--accent); }
+.welcome-body {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+  text-align: left;
+}
+.welcome-body p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.welcome-body ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.welcome-body ul li {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  padding-left: 2px;
+}
+.welcome-body ul li strong { color: var(--yellow); }
+
 /* ===== LOGIN ===== */
 .login-screen {
   display: flex;
@@ -57,26 +114,28 @@ body {
   position: relative;
 }
 .login-logo { text-align: center; margin-bottom: 26px; }
-.logo-icon { font-size: 36px; display: block; margin-bottom: 8px; }
+.logo-icon  { font-size: 36px; display: block; margin-bottom: 8px; }
 .logo-title { font-family: var(--font-title); font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-.logo-sub { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
-
-.login-main {}
-.login-hint { font-size: 11px; color: #4a5570; text-align: center; margin-top: 10px; }
+.logo-sub   { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+.login-hint { font-size: 11px; color: #3a4460; text-align: center; margin-top: 10px; line-height: 1.5; }
 
 /* DEV panel */
 .tab-dev-hidden { display: none; }
 .tab-dev-hidden.dev-visible { display: block; }
-
-.dev-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.dev-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; margin-top: 18px;
+  padding-top: 16px; border-top: 1px solid var(--border);
+}
 .dev-badge-label { font-size: 13px; font-weight: 700; color: var(--dev-color); letter-spacing: 0.08em; }
-.dev-panel-hint { font-size: 10px; color: #444; }
+.dev-panel-hint  { font-size: 10px; color: #444; }
 
 .btn-dev-enter {
   width: 100%; padding: 9px; background: #1e1a08;
   border: 1px solid var(--dev-color); color: var(--dev-color);
-  border-radius: var(--radius-sm); font-family: var(--font); font-size: 13px; font-weight: 700;
-  cursor: pointer; transition: background 0.2s; margin-bottom: 10px;
+  border-radius: var(--radius-sm); font-family: var(--font);
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: background 0.2s; margin-bottom: 10px;
 }
 .btn-dev-enter:hover { background: #2a2510; }
 
@@ -89,7 +148,7 @@ body {
   background: var(--border); width: 28%;
 }
 .dev-divider::before { left: 0; }
-.dev-divider::after { right: 0; }
+.dev-divider::after  { right: 0; }
 
 .dev-login-users-list {
   display: flex; flex-direction: column; gap: 4px;
@@ -113,7 +172,8 @@ body {
 .dev-quick-create { display: grid; grid-template-columns: 1fr 64px 64px; gap: 5px; margin-top: 6px; }
 .dev-input {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text); padding: 6px 8px; font-family: var(--font); font-size: 12px; outline: none; width: 100%;
+  color: var(--text); padding: 6px 8px; font-family: var(--font); font-size: 12px;
+  outline: none; width: 100%;
 }
 .dev-input:focus { border-color: var(--dev-color); }
 .dev-input option { background: var(--bg3); }
@@ -124,44 +184,42 @@ body {
 }
 .btn-dev-create-quick:hover { background: #2a2510; }
 
-.dev-date-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.dev-date-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .dev-date-row-app { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
-.dev-small-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-.btn-dev-apply-date {
-  padding: 5px 10px; background: var(--dev-color); color: #1a1200;
-  border: none; border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer;
-}
-.btn-dev-reset-date {
-  padding: 5px 10px; background: transparent; border: 1px solid var(--border);
-  color: var(--text-muted); border-radius: 5px; font-size: 11px; cursor: pointer;
-}
+.btn-dev-apply-date { padding: 5px 10px; background: var(--dev-color); color: #1a1200; border: none; border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.btn-dev-reset-date { padding: 5px 10px; background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 5px; font-size: 11px; cursor: pointer; white-space: nowrap; }
 .dev-fake-status { font-size: 11px; color: var(--dev-color); min-height: 14px; margin-top: 3px; }
 
 .dev-trigger {
   position: absolute; bottom: 10px; right: 10px;
-  width: 18px; height: 18px; cursor: pointer; border-radius: 50%; opacity: 0; z-index: 10;
+  width: 18px; height: 18px; cursor: pointer;
+  border-radius: 50%; opacity: 0; z-index: 10;
 }
 
 /* ===== FORM GROUPS ===== */
 .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .form-group label {
   font-size: 11px; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 5px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  display: flex; align-items: center; gap: 5px;
 }
 .label-hint { font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; color: #4a5570; }
-.form-group input, .form-group select {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  color: var(--text); padding: 9px 12px; font-family: var(--font); font-size: 13px; outline: none;
-  transition: border-color 0.2s; width: 100%;
+.form-group input,
+.form-group select {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  padding: 9px 12px; font-family: var(--font); font-size: 13px;
+  outline: none; transition: border-color 0.2s; width: 100%;
 }
 .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
 .form-group input[readonly] { opacity: 0.5; cursor: default; }
 .form-group select option { background: var(--bg3); }
 
 .btn-primary {
-  width: 100%; padding: 10px 16px; background: var(--accent); color: #fff;
-  border: none; border-radius: var(--radius-sm); font-family: var(--font);
-  font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s;
+  width: 100%; padding: 10px 16px; background: var(--accent);
+  color: #fff; border: none; border-radius: var(--radius-sm);
+  font-family: var(--font); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background 0.2s, transform 0.1s;
 }
 .btn-primary:hover { background: var(--accent-hover); }
 .btn-primary:active { transform: scale(0.98); }
@@ -204,43 +262,60 @@ body {
 .calendar-header h2 { font-family: var(--font-title); font-size: 19px; font-weight: 800; text-transform: capitalize; }
 .cal-nav {
   background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-  width: 34px; height: 34px; border-radius: 8px; font-size: 18px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: all 0.2s; line-height: 1;
+  width: 34px; height: 34px; border-radius: 8px; font-size: 18px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; line-height: 1;
 }
 .cal-nav:hover:not(:disabled) { background: var(--border); }
 .cal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .weekdays-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
-.weekdays-header div { text-align: center; font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 0; }
+.weekdays-header div {
+  text-align: center; font-size: 10px; font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 0;
+}
 
-.cal-hint { font-size: 11px; color: var(--text-muted); background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+.cal-hint {
+  font-size: 11px; color: var(--text-muted); background: var(--bg3);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 11px; margin-bottom: 8px; line-height: 1.5;
+}
 
 .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 
 .cal-day {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  min-height: 80px; padding: 5px; position: relative;
-  transition: border-color 0.15s, background 0.15s;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); min-height: 82px; padding: 5px;
+  position: relative; transition: border-color 0.15s, background 0.15s;
   user-select: none;
 }
-.cal-day.can-interact { cursor: pointer; }
-.cal-day.can-interact:hover { border-color: var(--accent); background: #1a2035; }
-.cal-day.can-dblclick { cursor: cell; }
-.cal-day.empty { background: transparent; border-color: transparent; pointer-events: none; }
-.cal-day.today { border-color: var(--accent); }
-.cal-day.weekend { background: #171e2e; }
-.cal-day.full-day { border-color: var(--red) !important; }
+.cal-day.empty     { background: transparent; border-color: transparent; pointer-events: none; }
+.cal-day.today     { border-color: var(--accent); }
+.cal-day.weekend   { background: #171e2e; }
+.cal-day.full-day  { border-color: var(--red) !important; }
 .cal-day.drag-over { background: #1a2a40 !important; border-color: var(--accent) !important; border-style: dashed !important; }
 
 .day-num { font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 3px; }
 .cal-day.today .day-num { color: var(--accent); }
 
+/* Botón + para añadir (admin/dev, clic simple) */
+.day-add-btn {
+  position: absolute; bottom: 4px; right: 4px;
+  width: 16px; height: 16px; border-radius: 4px;
+  background: transparent; border: 1px solid #3a4060;
+  color: var(--text-muted); font-size: 12px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; padding: 0;
+}
+.day-add-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 .day-full-badge {
   position: absolute; top: 3px; right: 3px; font-size: 8px;
-  background: var(--red); color: #fff; border-radius: 3px; padding: 1px 3px; font-weight: 800;
+  background: var(--red); color: #fff; border-radius: 3px;
+  padding: 1px 3px; font-weight: 800;
 }
 
-/* Guard chip con X y drag */
+/* Guard chips */
 .guard-chip-wrap {
   display: flex; align-items: center; gap: 2px; margin-bottom: 2px;
 }
@@ -249,20 +324,21 @@ body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: grab; transition: opacity 0.15s;
 }
-.guard-chip:active { cursor: grabbing; opacity: 0.7; }
+.guard-chip:active { cursor: grabbing; }
 .guard-chip.pending  { background: var(--yellow); color: #1a1200; }
 .guard-chip.approved { background: var(--green);  color: #031a09; }
-.guard-chip.dragging { opacity: 0.3; }
+.guard-chip.dragging { opacity: 0.25; }
 
 .chip-delete-btn {
   flex-shrink: 0; width: 14px; height: 14px; border-radius: 50%;
-  background: transparent; border: 1px solid #3a3a4a; color: var(--text-muted);
-  font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid #3a3a4a;
+  color: var(--text-muted); font-size: 9px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
   transition: all 0.15s; line-height: 1; padding: 0;
 }
 .chip-delete-btn:hover { background: var(--red); border-color: var(--red); color: #fff; }
 
-/* Drag ghost */
+/* Ghost drag */
 .drag-ghost {
   position: fixed; pointer-events: none; z-index: 999;
   background: var(--accent); color: #fff; padding: 4px 10px;
@@ -273,7 +349,11 @@ body {
 
 /* PDF */
 .pdf-section { margin-top: 14px; text-align: center; }
-.btn-pdf { padding: 9px 22px; background: var(--green); color: #031a09; border: none; border-radius: var(--radius-sm); font-family: var(--font); font-weight: 700; font-size: 13px; cursor: pointer; transition: opacity 0.2s; }
+.btn-pdf {
+  padding: 9px 22px; background: var(--green); color: #031a09;
+  border: none; border-radius: var(--radius-sm); font-family: var(--font);
+  font-weight: 700; font-size: 13px; cursor: pointer; transition: opacity 0.2s;
+}
 .btn-pdf:hover { opacity: 0.85; }
 
 /* ===== SIDEBAR ===== */
@@ -291,9 +371,42 @@ body {
 
 .prop-warning { font-size: 11px; color: var(--orange); min-height: 14px; line-height: 1.4; }
 
-/* Admin */
+/* Admin añadir usuario */
+.admin-add-user-section {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px; margin-bottom: 12px;
+}
+.admin-add-user-label {
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; display: block;
+}
+.admin-add-row { display: flex; gap: 7px; align-items: center; }
+.admin-select {
+  flex: 1; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 7px 9px;
+  font-family: var(--font); font-size: 12px; outline: none;
+}
+.admin-select:focus { border-color: var(--accent); }
+.admin-select option { background: var(--bg2); }
+.btn-admin-add-user {
+  padding: 7px 13px; background: var(--accent); color: #fff;
+  border: none; border-radius: 6px; font-family: var(--font);
+  font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background 0.2s;
+}
+.btn-admin-add-user:hover { background: var(--accent-hover); }
+
+.admin-divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+/* Admin acciones */
 .admin-actions { display: flex; flex-direction: column; gap: 7px; }
-.btn-admin { width: 100%; padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); font-family: var(--font); font-size: 12px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s; }
+.btn-admin {
+  width: 100%; padding: 8px 12px; background: var(--bg3);
+  border: 1px solid var(--border); color: var(--text);
+  border-radius: var(--radius-sm); font-family: var(--font);
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  text-align: left; transition: all 0.2s;
+}
 .btn-admin:hover { border-color: var(--accent); color: var(--accent); }
 .btn-admin.btn-warn:hover { border-color: var(--red); color: var(--red); }
 .admin-status { margin-top: 8px; font-size: 11px; color: var(--text-muted); min-height: 14px; }
@@ -302,12 +415,12 @@ body {
 .dev-toggles-list { display: flex; flex-direction: column; gap: 6px; }
 .dev-toggle-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 10px; background: var(--bg3); border-radius: var(--radius-sm);
+  padding: 7px 10px; background: var(--bg3); border-radius: var(--radius-sm);
   border: 1px solid var(--border); gap: 8px;
 }
 .dev-toggle-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .dev-toggle-label { font-size: 11px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dev-toggle-hint  { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-toggle-hint  { font-size: 10px; color: var(--text-muted); }
 
 /* Toggle switch */
 .toggle-switch { position: relative; display: inline-block; width: 38px; height: 20px; flex-shrink: 0; }
@@ -319,7 +432,7 @@ body {
 
 /* DEV switch list */
 .dev-switch-list { display: flex; flex-direction: column; gap: 5px; max-height: 160px; overflow-y: auto; }
-.switch-item { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; background: var(--bg3); border-radius: 6px; font-size: 11px; border: 1px solid var(--border); gap: 4px; }
+.switch-item { display: flex; align-items: center; padding: 5px 8px; background: var(--bg3); border-radius: 6px; font-size: 11px; border: 1px solid var(--border); gap: 4px; }
 .switch-item .info { flex: 1; color: var(--text-muted); }
 .switch-item .info strong { color: var(--text); }
 .btn-switch { font-size: 10px; padding: 2px 8px; background: var(--accent); color: #fff; border: none; border-radius: 4px; cursor: pointer; }
@@ -329,7 +442,7 @@ body {
 .users-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .users-count-badge { font-size: 11px; font-weight: 700; background: var(--bg3); color: var(--text-muted); border: 1px solid var(--border); border-radius: 20px; padding: 2px 9px; }
 .users-list { display: flex; flex-direction: column; gap: 5px; max-height: 220px; overflow-y: auto; padding-right: 2px; }
-.user-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 9px; background: var(--bg3); border-radius: 6px; font-size: 12px; border: 1px solid var(--border); gap: 6px; }
+.user-item { display: flex; align-items: center; padding: 6px 9px; background: var(--bg3); border-radius: 6px; font-size: 12px; border: 1px solid var(--border); gap: 6px; }
 .user-item-name { flex: 1; }
 .user-item-name small { color: var(--text-muted); font-size: 10px; }
 .user-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; white-space: nowrap; }
@@ -356,44 +469,134 @@ body {
   .sidebar { position: static; max-height: none; overflow-y: visible; }
 }
 
-/* ===== PRINT / PDF ===== */
+/* =============================================
+   PRINT / PDF — tabla limpia, sin colores
+   ============================================= */
 @media print {
-  .topbar, .sidebar, .pdf-section, .cal-nav, .modal-overlay,
-  .cal-hint, .chip-delete-btn, .day-full-badge { display: none !important; }
 
-  body { background: #fff; color: #000; font-family: Arial, sans-serif; }
-  .main-layout { display: block; padding: 0; }
-  .calendar-area { border: none; padding: 0; }
+  /* Ocultar todo lo que no es el calendario */
+  .topbar,
+  .sidebar,
+  .pdf-section,
+  .cal-nav,
+  .modal-overlay,
+  .cal-hint,
+  .chip-delete-btn,
+  .day-add-btn,
+  .day-full-badge,
+  .welcome-overlay,
+  #drag-ghost        { display: none !important; }
 
-  .calendar-header { margin-bottom: 8px; }
-  .calendar-header h2 { font-size: 16px; font-weight: bold; color: #000; font-family: Arial, sans-serif; }
+  /* Reset de página */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff !important; color: #000 !important; font-family: Arial, sans-serif !important; margin: 0; padding: 0; }
 
-  .weekdays-header { gap: 0; border: 1px solid #000; border-bottom: none; }
-  .weekdays-header div { border-right: 1px solid #000; padding: 4px 0; font-size: 10px; font-weight: bold; color: #000; text-align: center; }
-  .weekdays-header div:last-child { border-right: none; }
+  .main-layout { display: block !important; padding: 10px !important; }
 
-  .calendar-grid { gap: 0; border-left: 1px solid #000; border-top: 1px solid #000; }
-
-  .cal-day {
-    border-radius: 0 !important;
-    border: none;
-    border-right: 1px solid #000;
-    border-bottom: 1px solid #000;
+  .calendar-area {
     background: #fff !important;
-    min-height: 65px;
-    padding: 3px;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
   }
-  .cal-day.empty { background: #f5f5f5 !important; }
-  .cal-day.weekend { background: #fafafa !important; }
-  .cal-day.today { background: #fff !important; }
 
-  .day-num { color: #000 !important; font-size: 10px; font-weight: bold; }
+  /* Título */
+  .calendar-header {
+    display: flex !important;
+    justify-content: center !important;
+    margin-bottom: 6px !important;
+  }
+  .calendar-header h2 {
+    font-size: 15px !important;
+    font-weight: bold !important;
+    color: #000 !important;
+    font-family: Arial, sans-serif !important;
+    text-transform: capitalize !important;
+  }
 
-  .guard-chip-wrap { margin-bottom: 1px; }
+  /* Cabecera días de la semana */
+  .weekdays-header {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 0 !important;
+    border-top: 2px solid #000 !important;
+    border-left: 2px solid #000 !important;
+    margin-bottom: 0 !important;
+  }
+  .weekdays-header div {
+    border-right: 2px solid #000 !important;
+    border-bottom: 2px solid #000 !important;
+    padding: 4px 2px !important;
+    font-size: 9px !important;
+    font-weight: bold !important;
+    color: #000 !important;
+    text-align: center !important;
+    background: #f0f0f0 !important;
+    font-family: Arial, sans-serif !important;
+  }
+
+  /* Grid del calendario */
+  .calendar-grid {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 0 !important;
+    border-left: 2px solid #000 !important;
+    border-bottom: 2px solid #000 !important;
+  }
+
+  /* Celdas */
+  .cal-day {
+    background: #fff !important;
+    border: none !important;
+    border-right: 2px solid #000 !important;
+    border-top: 2px solid #000 !important;
+    border-radius: 0 !important;
+    min-height: 70px !important;
+    padding: 4px !important;
+    box-shadow: none !important;
+  }
+  .cal-day.empty {
+    background: #f8f8f8 !important;
+    border-right: 2px solid #000 !important;
+    border-top: 2px solid #000 !important;
+    pointer-events: none !important;
+  }
+  /* Sin colores especiales en print */
+  .cal-day.weekend,
+  .cal-day.today,
+  .cal-day.full-day { background: #fff !important; border-color: #000 !important; }
+
+  .day-num {
+    color: #000 !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    margin-bottom: 3px !important;
+    font-family: Arial, sans-serif !important;
+  }
+
+  /* Chips sin estilos de color de fondo distintos, solo texto */
+  .guard-chip-wrap { margin-bottom: 1px !important; gap: 0 !important; }
   .guard-chip {
-    font-size: 8px; padding: 1px 3px; border-radius: 0 !important;
-    display: block; width: 100%; cursor: default;
+    display: block !important;
+    width: 100% !important;
+    padding: 1px 3px !important;
+    border-radius: 0 !important;
+    font-size: 8px !important;
+    font-weight: bold !important;
+    font-family: Arial, sans-serif !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    cursor: default !important;
+    /* Sin fondos de color */
+    background: transparent !important;
+    color: #000 !important;
+    border-bottom: 1px dotted #ccc !important;
   }
-  .guard-chip.pending  { background: #ffd700 !important; color: #000 !important; }
-  .guard-chip.approved { background: #90ee90 !important; color: #000 !important; }
+  .guard-chip.pending,
+  .guard-chip.approved {
+    background: transparent !important;
+    color: #000 !important;
+  }
 }

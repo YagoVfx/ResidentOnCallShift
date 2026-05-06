@@ -1,53 +1,115 @@
 /* =============================================
-   GUARDIAS MIR — APP.JS v3
+   GUARDIAS MIR — APP.JS v4
+   Firebase-ready: todas las funciones de datos
+   pasan por la capa DB (ahora localStorage).
+   Para migrar a Firebase, reemplaza solo el
+   bloque "CAPA DE DATOS" al final del fichero.
    ============================================= */
 
 // ============================================================
 // ESTADO GLOBAL
 // ============================================================
 const STATE = {
-  session: null,
-  viewYear: null,
-  viewMonth: null,
-  // Drag & drop
-  drag: null,   // { name, level, fromKey, fromDay }
-  // Simulated day (DEV)
-  fakeDay: null,
-  // Modal
-  addModalDay: null,
-  addModalKey: null,
+  session:      null,   // { name, level, rol }
+  viewYear:     null,
+  viewMonth:    null,
+  drag:         null,   // { name, level, fromKey, fromDay, fromIdx }
+  fakeDay:      null,   // DEV: día simulado
+  addModalDay:  null,
+  addModalKey:  null,
 };
 
-const SETTINGS_KEY = 'mir_settings';
+const SETTINGS_KEY    = 'mir_settings';
+const SHOWN_WELCOME   = 'mir_shown_welcome'; // Set de nombres que ya vieron el aviso
 
 // ============================================================
-// SETTINGS DEFAULTS
+// ██████╗ ██████╗     ██╗      █████╗ ██╗   ██╗███████╗██████╗
+// ██╔══██╗██╔══██╗    ██║     ██╔══██╗╚██╗ ██╔╝██╔════╝██╔══██╗
+// ██║  ██║██████╔╝    ██║     ███████║ ╚████╔╝ █████╗  ██████╔╝
+// ██║  ██║██╔══██╗    ██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗
+// ██████╔╝██████╔╝    ███████╗██║  ██║   ██║   ███████╗██║  ██║
+// ╚═════╝ ╚═════╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+//
+// CAPA DE DATOS — Sustituye estas funciones por
+// llamadas a Firebase Firestore para persistencia
+// entre dispositivos. El resto del código NO cambia.
 // ============================================================
-function defaultSettings() {
-  return {
-    allowR1R2:    false,   // R1/R2 pueden proponer
-    levelMix:     true,    // Requerir mezcla R3/R4+R1/R2
-    limitWeek:    true,    // Entre semana máx 2
-    limitMon:     true,    // Lunes máx 3
-    limitSat:     true,    // Sábado máx 3
-    limitSun:     true,    // Domingo máx 3
-    deadlineOn:   true,    // Bloquear propuestas mes sig. tras día 15
-  };
+
+function loadGuardias() {
+  try { return JSON.parse(localStorage.getItem('guardias')) || {}; }
+  catch { return {}; }
+}
+function saveGuardias(d) {
+  localStorage.setItem('guardias', JSON.stringify(d));
+  // FIREBASE: await setDoc(doc(db,'guardias','data'), d);
+}
+
+function loadBackup() {
+  try { return JSON.parse(localStorage.getItem('guardias_backup')) || null; }
+  catch { return null; }
+}
+function saveBackup(d) {
+  localStorage.setItem('guardias_backup', JSON.stringify(d));
+  // FIREBASE: await setDoc(doc(db,'backups','latest'), d);
+}
+
+function loadUsers() {
+  try { return JSON.parse(localStorage.getItem('mir_users')) || []; }
+  catch { return []; }
+}
+function saveUsers(u) {
+  localStorage.setItem('mir_users', JSON.stringify(u));
+  // FIREBASE: await setDoc(doc(db,'users','list'), { users: u });
+}
+
+function loadApproved() {
+  try { return JSON.parse(localStorage.getItem('mir_approved')) || {}; }
+  catch { return {}; }
+}
+function saveApproved(d) {
+  localStorage.setItem('mir_approved', JSON.stringify(d));
+  // FIREBASE: await setDoc(doc(db,'approved','data'), d);
+}
+
+function loadSettings() {
+  try { return Object.assign({}, defaultSettings(), JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); }
+  catch { return defaultSettings(); }
+}
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  // FIREBASE: await setDoc(doc(db,'settings','data'), s);
+}
+
+// Registro de quién ya vio el aviso de bienvenida
+function hasSeenWelcome(name) {
+  try { const s = JSON.parse(localStorage.getItem(SHOWN_WELCOME)) || []; return s.includes(name); }
+  catch { return false; }
+}
+function markWelcomeSeen(name) {
+  try {
+    const s = JSON.parse(localStorage.getItem(SHOWN_WELCOME)) || [];
+    if (!s.includes(name)) { s.push(name); localStorage.setItem(SHOWN_WELCOME, JSON.stringify(s)); }
+  } catch {}
 }
 
 // ============================================================
-// STORAGE
+// FIN CAPA DE DATOS
 // ============================================================
-function loadGuardias() { try { return JSON.parse(localStorage.getItem('guardias')) || {}; } catch { return {}; } }
-function saveGuardias(d) { localStorage.setItem('guardias', JSON.stringify(d)); }
-function loadBackup()    { try { return JSON.parse(localStorage.getItem('guardias_backup')) || null; } catch { return null; } }
-function saveBackup(d)   { localStorage.setItem('guardias_backup', JSON.stringify(d)); }
-function loadUsers()     { try { return JSON.parse(localStorage.getItem('mir_users')) || []; } catch { return []; } }
-function saveUsers(u)    { localStorage.setItem('mir_users', JSON.stringify(u)); }
-function loadApproved()  { try { return JSON.parse(localStorage.getItem('mir_approved')) || {}; } catch { return {}; } }
-function saveApproved(d) { localStorage.setItem('mir_approved', JSON.stringify(d)); }
-function loadSettings()  { try { return Object.assign({}, defaultSettings(), JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch { return defaultSettings(); } }
-function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+// ============================================================
+// SETTINGS POR DEFECTO
+// ============================================================
+function defaultSettings() {
+  return {
+    allowR1R2:    false,  // R1/R2 pueden proponer
+    levelMix:     true,   // Requiere mezcla R3/R4 + R1/R2
+    limitWeek:    true,   // Mar–Vie máx 2
+    limitMon:     true,   // Lunes máx 3
+    limitSat:     true,   // Sábado máx 3
+    limitSun:     true,   // Domingo máx 3
+    deadlineOn:   true,   // Bloquear propuestas mes sig. tras día 15
+  };
+}
 
 // ============================================================
 // ADMIN POR DEFECTO
@@ -61,7 +123,7 @@ function ensureDefaultAdmin() {
 }
 
 // ============================================================
-// FECHA (con soporte fakeDay para DEV)
+// FECHA (con fakeDay DEV)
 // ============================================================
 function today() {
   const real = new Date();
@@ -73,11 +135,10 @@ function today() {
 function monthKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}`; }
 function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
 function firstDayOfMonth(y, m) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
-
 function dayOfWeek(y, m, d) { return new Date(y, m, d).getDay(); } // 0=Dom,1=Lun,6=Sab
 
 // ============================================================
-// REGLAS DE CAPACIDAD (respetan settings)
+// REGLAS DE CAPACIDAD
 // ============================================================
 function maxGuardsForDay(y, m, d) {
   const s = loadSettings();
@@ -85,16 +146,8 @@ function maxGuardsForDay(y, m, d) {
   if (wd === 1 && s.limitMon)  return 3;
   if (wd === 6 && s.limitSat)  return 3;
   if (wd === 0 && s.limitSun)  return 3;
-  if (s.limitWeek) return 2;
-  // Si todos los límites están desactivados → ilimitado en la práctica (usamos 99)
-  return 99;
-}
-
-function isDaySpecial(y, m, d) {
-  // "especial" = lunes/sáb/dom con límite 3 activo
-  const s = loadSettings();
-  const wd = dayOfWeek(y, m, d);
-  return (wd === 1 && s.limitMon) || (wd === 6 && s.limitSat) || (wd === 0 && s.limitSun);
+  if (s.limitWeek)             return 2;
+  return 99; // sin límite
 }
 
 function hasRequiredLevelMix(guards) {
@@ -122,10 +175,38 @@ function parseDaysInput(raw, y, m) {
     if (!/^\d+$/.test(p)) { result.errors.push(`"${p}" no válido.`); continue; }
     const n = parseInt(p, 10);
     if (n < 1 || n > maxDay) { result.errors.push(`Día ${n} fuera de rango (1–${maxDay}).`); continue; }
-    if (seen.has(n)) { result.errors.push(`Día ${n} duplicado.`); continue; }
+    if (seen.has(n))          { result.errors.push(`Día ${n} duplicado.`); continue; }
     seen.add(n); result.valid.push(n);
   }
   return result;
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// AVISO DE BIENVENIDA
+// ============================================================
+function showWelcomeIfNeeded(session) {
+  // Solo usuarios normales, solo la primera vez
+  if (session.rol !== 'user') return;
+  if (hasSeenWelcome(session.name)) return;
+
+  document.getElementById('welcome-name').textContent = session.name;
+  document.getElementById('welcome-overlay').classList.remove('hidden');
+}
+
+function setupWelcome() {
+  document.getElementById('btn-welcome-close').addEventListener('click', () => {
+    markWelcomeSeen(STATE.session?.name || '');
+    document.getElementById('welcome-overlay').classList.add('hidden');
+  });
 }
 
 // ============================================================
@@ -142,10 +223,10 @@ function setupDevTrigger() {
 }
 function toggleDevPanel() {
   const tab = document.getElementById('tab-dev');
-  const visible = tab.classList.contains('dev-visible');
-  tab.classList.toggle('dev-visible', !visible);
-  tab.classList.toggle('tab-dev-hidden', visible);
-  if (!visible) renderDevLoginList();
+  const vis = tab.classList.contains('dev-visible');
+  tab.classList.toggle('dev-visible', !vis);
+  tab.classList.toggle('tab-dev-hidden', vis);
+  if (!vis) renderDevLoginList();
 }
 
 // ============================================================
@@ -154,31 +235,30 @@ function toggleDevPanel() {
 function setupLogin() {
   ensureDefaultAdmin();
   setupDevTrigger();
+  setupWelcome();
 
   const nameEl  = document.getElementById('login-name');
-  const levelEl = document.getElementById('login-level');
+  const levelGrp = document.getElementById('login-level-group');
   const passGrp = document.getElementById('login-admin-pass-group');
   const passEl  = document.getElementById('login-pass');
 
-  // Mostrar campo pass si nombre coincide con admin
+  // Detectar admin al escribir nombre
   nameEl.addEventListener('input', () => {
     const name = nameEl.value.trim();
-    const users = loadUsers();
-    const isAdmin = users.some(u => u.name === name && u.rol === 'admin');
+    const isAdmin = loadUsers().some(u => u.name === name && u.rol === 'admin');
     passGrp.classList.toggle('hidden', !isAdmin);
-    if (isAdmin) { levelEl.closest('.form-group').classList.add('hidden'); }
-    else         { levelEl.closest('.form-group').classList.remove('hidden'); }
+    levelGrp.classList.toggle('hidden', isAdmin);
   });
 
   document.getElementById('btn-login-user').addEventListener('click', doLogin);
-  nameEl.addEventListener('keydown',  e => { if (e.key === 'Enter') doLogin(); });
-  passEl.addEventListener('keydown',  e => { if (e.key === 'Enter') doLogin(); });
+  nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  passEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
   // DEV
   document.getElementById('btn-login-dev').addEventListener('click', () => startSession({ name: 'DEV', level: 'R4', rol: 'dev' }));
   document.getElementById('btn-dev-quick-create').addEventListener('click', devQuickCreate);
 
-  // DEV fake day (en login)
+  // DEV fake day login
   document.getElementById('btn-dev-apply-date').addEventListener('click', () => {
     const v = parseInt(document.getElementById('dev-fake-day').value, 10);
     if (isNaN(v) || v < 1 || v > 31) { document.getElementById('dev-fake-day-status').textContent = '❌ Día inválido.'; return; }
@@ -203,13 +283,11 @@ function doLogin() {
   const admin = users.find(u => u.name === name && u.rol === 'admin');
 
   if (admin) {
-    // Login admin
     if (admin.pass && admin.pass !== pass) { showLoginError('Contraseña incorrecta.'); return; }
     startSession({ name: admin.name, level: admin.level || 'R4', rol: 'admin' });
     return;
   }
 
-  // Login usuario normal
   if (!level) { showLoginError('Selecciona tu nivel MIR.'); return; }
   if (!users.some(u => u.name === name && u.rol === 'user')) {
     users.push({ name, level, rol: 'user' });
@@ -227,8 +305,7 @@ function devQuickCreate() {
   if (users.some(u => u.name === name)) { showLoginError('Nombre ya existente.'); return; }
   const u = { name, level, rol };
   if (rol === 'admin') u.pass = 'admin123';
-  users.push(u);
-  saveUsers(users);
+  users.push(u); saveUsers(users);
   document.getElementById('dev-quick-name').value = '';
   renderDevLoginList();
   startSession({ name, level, rol });
@@ -248,9 +325,12 @@ function renderDevLoginList() {
       </div>
     </div>`).join('');
 }
-function devLoginAs(i)     { const u = loadUsers()[i]; if (u) startSession({ name: u.name, level: u.level||'R4', rol: u.rol }); }
-function devDelFromLogin(i){ let u = loadUsers(); const x = u[i]; if (!x) return; if (x.rol==='admin' && u.filter(a=>a.rol==='admin').length<=1){ showLoginError('Mínimo 1 admin.'); return; } u.splice(i,1); saveUsers(u); renderDevLoginList(); }
-
+function devLoginAs(i) { const u = loadUsers()[i]; if (u) startSession({ name: u.name, level: u.level||'R4', rol: u.rol }); }
+function devDelFromLogin(i) {
+  let users = loadUsers(); const x = users[i]; if (!x) return;
+  if (x.rol==='admin' && users.filter(a=>a.rol==='admin').length<=1) { showLoginError('Mínimo 1 admin.'); return; }
+  users.splice(i,1); saveUsers(users); renderDevLoginList();
+}
 function showLoginError(msg) {
   const el = document.getElementById('login-error');
   el.textContent = msg;
@@ -274,21 +354,25 @@ function startSession(sess) {
   renderTopbar();
   renderSidebar();
   renderCalendar();
-
   if (!navReady) { setupNavigation(); navReady = true; }
+
+  // Mostrar aviso bienvenida solo a usuarios normales y solo la primera vez
+  showWelcomeIfNeeded(sess);
 }
 
 function logout() {
   STATE.session = null;
+  document.getElementById('welcome-overlay').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
+
   document.getElementById('login-name').value  = '';
   document.getElementById('login-level').value = '';
   document.getElementById('login-pass').value  = '';
   document.getElementById('login-error').textContent = '';
   document.getElementById('login-admin-pass-group').classList.add('hidden');
-  document.getElementById('login-level').closest('.form-group').classList.remove('hidden');
-  // Ocultar DEV panel
+  document.getElementById('login-level-group').classList.remove('hidden');
+
   const tab = document.getElementById('tab-dev');
   tab.classList.remove('dev-visible');
   tab.classList.add('tab-dev-hidden');
@@ -302,7 +386,8 @@ function renderTopbar() {
   const rolEl = document.getElementById('topbar-rol');
   rolEl.textContent = session.rol.toUpperCase();
   rolEl.className   = `topbar-rol rol-${session.rol}`;
-  document.getElementById('topbar-user').textContent = session.name + (session.level ? ` · ${session.level}` : '');
+  document.getElementById('topbar-user').textContent =
+    session.name + (session.level ? ` · ${session.level}` : '');
 }
 
 // ============================================================
@@ -327,9 +412,8 @@ function renderSidebar() {
 
   if (isAdm) {
     const key = monthKey(STATE.viewYear, STATE.viewMonth);
-    const approved = loadApproved();
     document.getElementById('admin-status').textContent =
-      approved[key] ? '✅ Mes aprobado' : '📋 Mes pendiente';
+      loadApproved()[key] ? '✅ Mes aprobado' : '📋 Mes pendiente';
   }
 }
 
@@ -349,8 +433,7 @@ function updateFormState() {
   const now = today();
   const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate();
   const s = loadSettings();
-
-  const isNextMonth = (viewYear > curY) || (viewYear === curY && viewMonth > curM);
+  const isNextMonth    = (viewYear > curY) || (viewYear === curY && viewMonth > curM);
   const isCurrentMonth = viewYear === curY && viewMonth === curM;
 
   const warnEl = document.getElementById('form-deadline-warning');
@@ -363,13 +446,13 @@ function updateFormState() {
 
   if (!canPropose(session.level)) {
     warnEl.classList.remove('hidden');
-    warnEl.textContent = `ℹ️ Tu nivel (${session.level}) no tiene permiso para proponer. El DEV puede activarlo.`;
+    warnEl.textContent = `ℹ️ Tu nivel (${session.level}) no puede proponer guardias aún. El DEV puede activarlo.`;
     btn.disabled = true;
     return;
   }
   if (isNextMonth && s.deadlineOn && curD > 15) {
     warnEl.classList.remove('hidden');
-    warnEl.textContent = '⚠️ Plazo cerrado. Las propuestas del mes siguiente se cierran el día 15 del mes actual.';
+    warnEl.textContent = '⚠️ Plazo cerrado. Las propuestas del mes siguiente se cierran el día 15 a las 00:00.';
     btn.disabled = true;
     return;
   }
@@ -381,7 +464,11 @@ function renderUsersList() {
   document.getElementById('users-count-badge').textContent = users.length;
   const el = document.getElementById('users-list');
   el.innerHTML = users.length
-    ? users.map(u => `<div class="user-item"><span class="user-item-name">${escHtml(u.name)} <small>${u.level||''}</small></span><span class="user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span></div>`).join('')
+    ? users.map(u => `
+        <div class="user-item">
+          <span class="user-item-name">${escHtml(u.name)} <small>${u.level||''}</small></span>
+          <span class="user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span>
+        </div>`).join('')
     : '<p style="color:#444;font-size:12px;text-align:center;padding:4px 0">Sin usuarios</p>';
 }
 
@@ -389,11 +476,24 @@ function renderDevSwitchList() {
   const users = loadUsers();
   const el = document.getElementById('dev-user-switch-list');
   el.innerHTML = users.length
-    ? users.map((u, i) => `<div class="switch-item"><span class="info"><strong>${escHtml(u.name)}</strong> ${u.level?'·'+u.level:''} <span class="dev-login-user-badge badge-${u.rol}">${u.rol}</span></span><button class="btn-switch" onclick="devSwitchInApp(${i})">Entrar</button><button class="btn-del" onclick="devDelInApp(${i})">✕</button></div>`).join('')
+    ? users.map((u, i) => `
+        <div class="switch-item">
+          <span class="info"><strong>${escHtml(u.name)}</strong> ${u.level?'·'+u.level:''} <span class="dev-login-user-badge badge-${u.rol}">${u.rol}</span></span>
+          <button class="btn-switch" onclick="devSwitchInApp(${i})">Entrar</button>
+          <button class="btn-del"    onclick="devDelInApp(${i})">✕</button>
+        </div>`).join('')
     : '<p style="color:#444;font-size:11px">Sin usuarios</p>';
 }
-function devSwitchInApp(i) { const u = loadUsers()[i]; if (!u) return; STATE.session = { name: u.name, level: u.level||'R4', rol: u.rol }; renderTopbar(); renderSidebar(); renderCalendar(); }
-function devDelInApp(i) { let u = loadUsers(); const x=u[i]; if(!x) return; if(x.rol==='admin'&&u.filter(a=>a.rol==='admin').length<=1){alert('Mínimo 1 admin.');return;} u.splice(i,1); saveUsers(u); renderDevSwitchList(); renderUsersList(); }
+function devSwitchInApp(i) {
+  const u = loadUsers()[i]; if (!u) return;
+  STATE.session = { name: u.name, level: u.level||'R4', rol: u.rol };
+  renderTopbar(); renderSidebar(); renderCalendar();
+}
+function devDelInApp(i) {
+  let users = loadUsers(); const x = users[i]; if (!x) return;
+  if (x.rol==='admin' && users.filter(a=>a.rol==='admin').length<=1) { alert('Mínimo 1 admin.'); return; }
+  users.splice(i,1); saveUsers(users); renderDevSwitchList(); renderUsersList();
+}
 
 // ============================================================
 // NAVIGATION SETUP
@@ -409,13 +509,19 @@ function setupNavigation() {
   document.getElementById('btn-dev-create').addEventListener('click', devCreateUser);
   document.getElementById('btn-export-pdf').addEventListener('click', () => window.print());
 
+  // Admin: añadir usuario con input texto
+  document.getElementById('btn-admin-add-user').addEventListener('click', adminAddUser);
+  document.getElementById('admin-new-name').addEventListener('keydown', e => { if (e.key === 'Enter') adminAddUser(); });
+
   // Validación live input días
   document.getElementById('prop-days').addEventListener('input', () => {
     const raw = document.getElementById('prop-days').value;
     if (/[^0-9,\s]/.test(raw)) {
       document.getElementById('prop-days').value = raw.replace(/[^0-9,\s]/g, '');
       document.getElementById('prop-days-warning').textContent = 'Solo números separados por comas.';
-    } else document.getElementById('prop-days-warning').textContent = '';
+    } else {
+      document.getElementById('prop-days-warning').textContent = '';
+    }
   });
   document.getElementById('prop-count').addEventListener('input', () => {
     const v = parseInt(document.getElementById('prop-count').value, 10);
@@ -444,7 +550,7 @@ function setupNavigation() {
   document.getElementById('btn-dev-apply-date-app').addEventListener('click', () => {
     const v = parseInt(document.getElementById('dev-fake-day-app').value, 10);
     const st = document.getElementById('dev-fake-day-status-app');
-    if (isNaN(v)||v<1||v>31) { st.textContent='❌ Inválido.'; return; }
+    if (isNaN(v)||v<1||v>31) { st.textContent = '❌ Inválido.'; return; }
     STATE.fakeDay = v; st.textContent = `✅ Simulando día ${v}`;
     updateFormState(); renderCalendar();
   });
@@ -455,23 +561,47 @@ function setupNavigation() {
     updateFormState(); renderCalendar();
   });
 
-  // Add modal
+  // Modal añadir guardia
   document.getElementById('add-modal-close').addEventListener('click', closeAddModal);
-  document.getElementById('add-modal').addEventListener('click', e => { if (e.target === document.getElementById('add-modal')) closeAddModal(); });
+  document.getElementById('add-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('add-modal')) closeAddModal();
+  });
   document.getElementById('btn-add-modal-confirm').addEventListener('click', confirmAddModal);
 }
 
 function navPrev() {
   const now = today();
-  if (STATE.viewYear === now.getFullYear() && STATE.viewMonth === now.getMonth()) return;
+  if (STATE.viewYear===now.getFullYear() && STATE.viewMonth===now.getMonth()) return;
   STATE.viewMonth--; if (STATE.viewMonth < 0) { STATE.viewMonth = 11; STATE.viewYear--; }
   renderCalendar(); updateFormState();
 }
 function navNext() {
-  const now = today(); let ny = now.getFullYear(), nm = now.getMonth()+1; if (nm>11){nm=0;ny++;}
+  const now = today(); let ny=now.getFullYear(), nm=now.getMonth()+1; if(nm>11){nm=0;ny++;}
   if (STATE.viewYear===ny && STATE.viewMonth===nm) return;
   STATE.viewMonth++; if (STATE.viewMonth>11){STATE.viewMonth=0;STATE.viewYear++;}
   renderCalendar(); updateFormState();
+}
+
+// ============================================================
+// ADMIN: AÑADIR USUARIO (input texto + select nivel)
+// ============================================================
+function adminAddUser() {
+  const name  = document.getElementById('admin-new-name').value.trim();
+  const level = document.getElementById('admin-new-level').value;
+  const warnEl = document.getElementById('admin-add-user-warning');
+  warnEl.textContent = '';
+
+  if (!name) { warnEl.textContent = 'Introduce un nombre.'; return; }
+  let users = loadUsers();
+  if (users.some(u => u.name === name)) { warnEl.textContent = 'Ese nombre ya está registrado.'; return; }
+
+  users.push({ name, level, rol: 'user' });
+  saveUsers(users);
+  document.getElementById('admin-new-name').value = '';
+  renderUsersList();
+  warnEl.style.color = 'var(--green)';
+  warnEl.textContent = `✅ Usuario "${name}" (${level}) añadido.`;
+  setTimeout(() => { warnEl.textContent = ''; warnEl.style.color = ''; }, 3000);
 }
 
 // ============================================================
@@ -484,24 +614,23 @@ function renderCalendar() {
 
   cleanOldMonths(curY, curM);
 
-  // Título
   const title = new Date(y, m, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
   document.getElementById('calendar-title').textContent = title.charAt(0).toUpperCase() + title.slice(1);
 
-  // Nav buttons
   document.getElementById('btn-prev').disabled = (y===curY && m===curM);
-  let ny=curY, nm=curM+1; if (nm>11){nm=0;ny++;}
+  let ny=curY, nm=curM+1; if(nm>11){nm=0;ny++;}
   document.getElementById('btn-next').disabled = (y===ny && m===nm);
 
-  const guardias = loadGuardias();
-  const key = monthKey(y, m);
+  const guardias  = loadGuardias();
+  const key       = monthKey(y, m);
   const monthData = guardias[key] || {};
-  const approved = loadApproved();
+  const approved  = loadApproved();
   const isApproved = !!approved[key];
-  const rol = session.rol;
-  const isAdm = rol === 'admin' || rol === 'dev';
+  const rol       = session.rol;
+  const isAdm     = rol === 'admin' || rol === 'dev';
+  const isUser    = rol === 'user';
 
-  const firstDay = firstDayOfMonth(y, m);
+  const firstDay  = firstDayOfMonth(y, m);
   const totalDays = daysInMonth(y, m);
   const totalCells = Math.ceil((firstDay + totalDays) / 7) * 7;
 
@@ -518,17 +647,15 @@ function renderCalendar() {
     }
 
     const dayGuards = monthData[String(dn)] || [];
-    const maxG = maxGuardsForDay(y, m, dn);
-    const isFull = dayGuards.length >= maxG;
-    const isToday = y===curY && m===curM && dn===now.getDate();
-    const isWknd  = [0,6].includes(dayOfWeek(y,m,dn));
-    const isSpecial = isDaySpecial(y, m, dn);
+    const maxG      = maxGuardsForDay(y, m, dn);
+    const isFull    = dayGuards.length >= maxG;
+    const isToday   = y===curY && m===curM && dn===now.getDate();
+    const isWknd    = [0,6].includes(dayOfWeek(y,m,dn));
 
     cell.className = ['cal-day',
-      isToday ? 'today' : '',
-      isWknd  ? 'weekend' : '',
+      isToday ? 'today'    : '',
+      isWknd  ? 'weekend'  : '',
       isFull  ? 'full-day' : '',
-      isAdm   ? 'can-interact can-dblclick' : 'can-interact',
     ].filter(Boolean).join(' ');
 
     // Número día
@@ -537,7 +664,7 @@ function renderCalendar() {
     numEl.textContent = dn;
     cell.appendChild(numEl);
 
-    // Badge "LLENO" (solo en pantalla, no en print)
+    // Badge LLENO
     if (isFull && maxG < 99) {
       const badge = document.createElement('span');
       badge.className = 'day-full-badge';
@@ -545,7 +672,7 @@ function renderCalendar() {
       cell.appendChild(badge);
     }
 
-    // Guard chips
+    // Chips de guardias
     dayGuards.forEach((g, idx) => {
       const wrap = document.createElement('div');
       wrap.className = 'guard-chip-wrap';
@@ -556,13 +683,12 @@ function renderCalendar() {
       chip.title = `${g.name} · ${g.level}`;
       wrap.appendChild(chip);
 
+      // Admin/dev: drag
       if (isAdm) {
-        // Drag handle
         chip.draggable = true;
         chip.addEventListener('dragstart', e => {
           STATE.drag = { name: g.name, level: g.level, fromKey: key, fromDay: dn, fromIdx: idx };
           chip.classList.add('dragging');
-          // Actualizar ghost
           const ghost = document.getElementById('drag-ghost');
           ghost.textContent = `${g.name} (${g.level})`;
           ghost.classList.remove('hidden');
@@ -572,17 +698,22 @@ function renderCalendar() {
           chip.classList.remove('dragging');
           document.getElementById('drag-ghost').classList.add('hidden');
           STATE.drag = null;
-          // Limpiar drag-over
           document.querySelectorAll('.cal-day.drag-over').forEach(c => c.classList.remove('drag-over'));
         });
+      }
 
-        // Botón X
+      // Botón X: admin/dev siempre; usuario normal solo sus propias guardias
+      const canDelete = isAdm || (isUser && g.name === session.name);
+      if (canDelete) {
         const xBtn = document.createElement('button');
         xBtn.className = 'chip-delete-btn';
         xBtn.title = 'Eliminar guardia';
         xBtn.innerHTML = '✕';
         xBtn.addEventListener('click', e => {
           e.stopPropagation();
+          if (isUser) {
+            if (!confirm(`¿Eliminar tu guardia del día ${dn}?`)) return;
+          }
           deleteGuard(key, dn, idx);
         });
         wrap.appendChild(xBtn);
@@ -591,7 +722,7 @@ function renderCalendar() {
       cell.appendChild(wrap);
     });
 
-    // Drop target
+    // Drop target (admin/dev)
     if (isAdm) {
       cell.addEventListener('dragover', e => {
         e.preventDefault();
@@ -603,14 +734,25 @@ function renderCalendar() {
         cell.classList.remove('drag-over');
         if (STATE.drag) dropGuard(dn, key);
       });
-      // Doble clic = añadir guardia
-      cell.addEventListener('dblclick', () => openAddModal(dn, key, maxG));
+
+      // Botón + (clic simple para añadir) — solo si no está lleno
+      if (!isFull || maxG >= 99) {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'day-add-btn';
+        addBtn.title = 'Añadir guardia';
+        addBtn.innerHTML = '＋';
+        addBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          openAddModal(dn, key, maxG);
+        });
+        cell.appendChild(addBtn);
+      }
     }
 
     grid.appendChild(cell);
   }
 
-  // Ghost mouse follow
+  // Ghost sigue el ratón
   document.onmousemove = e => {
     const ghost = document.getElementById('drag-ghost');
     if (!ghost.classList.contains('hidden')) {
@@ -619,7 +761,7 @@ function renderCalendar() {
     }
   };
 
-  // PDF
+  // PDF section
   document.getElementById('pdf-section').classList.toggle('hidden', !(isApproved && isAdm));
 
   // Admin status
@@ -632,8 +774,8 @@ function renderCalendar() {
 function cleanOldMonths(curY, curM) {
   const g = loadGuardias(), a = loadApproved(); let ch = false;
   [...Object.keys(g), ...Object.keys(a)].forEach(k => {
-    const [y, m] = k.split('-').map(Number);
-    if (y < curY || (y===curY && m-1 < curM)) { delete g[k]; delete a[k]; ch = true; }
+    const [y, mo] = k.split('-').map(Number);
+    if (y < curY || (y===curY && mo-1 < curM)) { delete g[k]; delete a[k]; ch = true; }
   });
   if (ch) { saveGuardias(g); saveApproved(a); }
 }
@@ -642,45 +784,31 @@ function cleanOldMonths(curY, curM) {
 // DRAG & DROP
 // ============================================================
 function dropGuard(toDay, toKey) {
-  const drag = STATE.drag;
-  if (!drag) return;
+  const drag = STATE.drag; if (!drag) return;
+  const { fromKey, fromDay, fromIdx, name, level } = drag;
+  if (fromKey===toKey && fromDay===toDay) return;
 
   const guardias = loadGuardias();
-  const { fromKey, fromDay, fromIdx, name, level } = drag;
-
-  // Si caemos en el mismo día, no hacer nada
-  if (fromKey === toKey && fromDay === toDay) return;
-
   const src = (guardias[fromKey]||{})[String(fromDay)];
   if (!src) return;
 
-  // Eliminar del origen
   src.splice(fromIdx, 1);
   if (!src.length) delete guardias[fromKey][String(fromDay)];
 
-  // Añadir al destino
   if (!guardias[toKey]) guardias[toKey] = {};
   if (!guardias[toKey][String(toDay)]) guardias[toKey][String(toDay)] = [];
   const dest = guardias[toKey][String(toDay)];
   const maxG = maxGuardsForDay(STATE.viewYear, STATE.viewMonth, toDay);
 
-  if (dest.length >= maxG) {
-    alert(`No se puede mover: el día ${toDay} está completo (máx ${maxG}).`);
-    // Revertir: devolver al origen
+  const revert = () => {
     if (!guardias[fromKey]) guardias[fromKey] = {};
     if (!guardias[fromKey][String(fromDay)]) guardias[fromKey][String(fromDay)] = [];
     guardias[fromKey][String(fromDay)].splice(fromIdx, 0, { name, level });
     saveGuardias(guardias);
-    return;
-  }
-  if (dest.some(g => g.name === name)) {
-    alert(`${name} ya tiene guardia el día ${toDay}.`);
-    if (!guardias[fromKey]) guardias[fromKey] = {};
-    if (!guardias[fromKey][String(fromDay)]) guardias[fromKey][String(fromDay)] = [];
-    guardias[fromKey][String(fromDay)].splice(fromIdx, 0, { name, level });
-    saveGuardias(guardias);
-    return;
-  }
+  };
+
+  if (dest.length >= maxG) { alert(`Día ${toDay} completo (máx ${maxG}).`); revert(); return; }
+  if (dest.some(g => g.name===name)) { alert(`${name} ya tiene guardia el día ${toDay}.`); revert(); return; }
 
   dest.push({ name, level });
   saveGuardias(guardias);
@@ -689,7 +817,7 @@ function dropGuard(toDay, toKey) {
 }
 
 // ============================================================
-// ELIMINAR GUARDIA (botón X)
+// ELIMINAR GUARDIA
 // ============================================================
 function deleteGuard(key, day, idx) {
   const g = loadGuardias();
@@ -701,10 +829,10 @@ function deleteGuard(key, day, idx) {
 }
 
 // ============================================================
-// MODAL AÑADIR GUARDIA (doble clic en día)
+// MODAL AÑADIR GUARDIA (clic en + de admin/dev)
 // ============================================================
 function openAddModal(day, key, maxG) {
-  const guardias = loadGuardias();
+  const guardias  = loadGuardias();
   const dayGuards = (guardias[key]||{})[String(day)] || [];
 
   STATE.addModalDay = day;
@@ -715,19 +843,17 @@ function openAddModal(day, key, maxG) {
   document.getElementById('add-modal-title').textContent = `Añadir guardia — ${dateStr}`;
   document.getElementById('add-modal-warning').textContent = '';
 
-  const sel = document.getElementById('add-modal-user');
+  const sel   = document.getElementById('add-modal-user');
   sel.innerHTML = '<option value="">— Selecciona usuario —</option>';
-
   const users = loadUsers();
   const inDay = new Set(dayGuards.map(g => g.name));
-  const avail = users.filter(u => !inDay.has(u.name));
 
   if (dayGuards.length >= maxG) {
-    sel.innerHTML = '<option value="">Día completo (máx ' + maxG + ')</option>';
+    sel.innerHTML = `<option value="">Día completo (máx ${maxG})</option>`;
     sel.disabled = true;
   } else {
     sel.disabled = false;
-    avail.forEach(u => {
+    users.filter(u => !inDay.has(u.name)).forEach(u => {
       const opt = document.createElement('option');
       opt.value = u.name;
       opt.textContent = `${u.name} (${u.level||'-'}) · ${u.rol}`;
@@ -741,16 +867,15 @@ function openAddModal(day, key, maxG) {
 
 function closeAddModal() {
   document.getElementById('add-modal').classList.add('hidden');
-  STATE.addModalDay = null;
-  STATE.addModalKey = null;
+  STATE.addModalDay = null; STATE.addModalKey = null;
 }
 
 function confirmAddModal() {
   const { addModalDay: day, addModalKey: key } = STATE;
   if (!day || !key) return;
 
-  const sel = document.getElementById('add-modal-user');
-  const name = sel.value;
+  const sel    = document.getElementById('add-modal-user');
+  const name   = sel.value;
   const warnEl = document.getElementById('add-modal-warning');
   warnEl.textContent = '';
 
@@ -764,7 +889,7 @@ function confirmAddModal() {
   const maxG = maxGuardsForDay(STATE.viewYear, STATE.viewMonth, day);
 
   if (existing.length >= maxG) { warnEl.textContent = 'Día completo.'; return; }
-  if (existing.some(g => g.name === name)) { warnEl.textContent = 'Ese usuario ya tiene guardia ese día.'; return; }
+  if (existing.some(g => g.name===name)) { warnEl.textContent = 'Ese usuario ya tiene guardia ese día.'; return; }
 
   existing.push({ name, level });
   saveGuardias(guardias);
@@ -783,9 +908,9 @@ function submitProposal() {
 
   if (!canPropose(session.level)) return;
 
-  const isNextMonth = (y > curY) || (y === curY && m > curM);
+  const isNextMonth = (y > curY) || (y===curY && m > curM);
   if (isNextMonth && s.deadlineOn && curD > 15) {
-    alert('Plazo cerrado: propuestas del mes siguiente hasta el día 15 del mes actual.');
+    alert('Plazo cerrado: propuestas del mes siguiente hasta el día 15 a las 00:00.');
     return;
   }
 
@@ -803,8 +928,8 @@ function submitProposal() {
   if (!valid.length) { document.getElementById('prop-days-warning').textContent = 'Sin días válidos.'; return; }
 
   const daysToAdd = valid.slice(0, count);
-  const guardias = loadGuardias();
-  const key = monthKey(y, m);
+  const guardias  = loadGuardias();
+  const key       = monthKey(y, m);
   if (!guardias[key]) guardias[key] = {};
 
   const added = [], skipped = [];
@@ -814,12 +939,12 @@ function submitProposal() {
     const existing = guardias[key][String(day)];
     const maxG = maxGuardsForDay(y, m, day);
 
-    if (existing.length >= maxG) { skipped.push(`Día ${day}: completo`); continue; }
-    if (existing.some(g => g.name === session.name)) { skipped.push(`Día ${day}: ya apuntado`); continue; }
+    if (existing.length >= maxG)                              { skipped.push(`Día ${day}: completo`); continue; }
+    if (existing.some(g => g.name===session.name))            { skipped.push(`Día ${day}: ya apuntado`); continue; }
 
     const newEntry = { name: session.name, level: session.level };
     const sim = [...existing, newEntry];
-    if (s.levelMix && maxG <= 3 && sim.length === maxG && !hasRequiredLevelMix(sim)) {
+    if (s.levelMix && maxG <= 3 && sim.length===maxG && !hasRequiredLevelMix(sim)) {
       skipped.push(`Día ${day}: mezcla de niveles inválida`); continue;
     }
 
@@ -836,7 +961,7 @@ function submitProposal() {
   if (!msg) msg = 'No se añadió ninguna guardia.';
   alert(msg);
 
-  document.getElementById('prop-days').value = '';
+  document.getElementById('prop-days').value  = '';
   document.getElementById('prop-count').value = '';
   document.getElementById('prop-days-warning').textContent = '';
 }
@@ -850,7 +975,7 @@ function approveMonth() {
   approved[key] = true;
   saveApproved(approved);
 
-  // Resetear lista de usuarios (mantener admins)
+  // Resetear usuarios (mantener solo admins)
   let users = loadUsers();
   users = users.filter(u => u.rol === 'admin');
   saveUsers(users);
@@ -862,10 +987,10 @@ function approveMonth() {
 }
 
 function resetMonth() {
-  const key = monthKey(STATE.viewYear, STATE.viewMonth);
+  const key   = monthKey(STATE.viewYear, STATE.viewMonth);
   const label = new Date(STATE.viewYear, STATE.viewMonth, 1)
     .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-  if (!confirm(`¿Resetear guardias de ${label}?\nSe hará backup automático.`)) return;
+  if (!confirm(`¿Resetear guardias de ${label}?\nSe hará un backup automático.`)) return;
 
   const g = loadGuardias();
   saveBackup(JSON.parse(JSON.stringify(g)));
@@ -890,7 +1015,7 @@ function restoreBackup() {
 }
 
 // ============================================================
-// DEV: CREAR USUARIO (en app)
+// DEV: CREAR USUARIO (panel lateral app)
 // ============================================================
 function devCreateUser() {
   const name  = document.getElementById('dev-new-name').value.trim();
@@ -901,18 +1026,12 @@ function devCreateUser() {
   if (users.some(u => u.name === name)) { alert('Nombre ya existente.'); return; }
   const u = { name, level, rol };
   if (rol === 'admin') u.pass = 'admin123';
-  users.push(u);
-  saveUsers(users);
+  users.push(u); saveUsers(users);
   document.getElementById('dev-new-name').value = '';
   renderDevSwitchList();
   renderUsersList();
   alert(`Usuario "${name}" (${level} · ${rol}) creado.${rol==='admin'?' Contraseña: admin123':''}`);
 }
-
-// ============================================================
-// UTILS
-// ============================================================
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ============================================================
 // INIT
