@@ -1,54 +1,52 @@
 /* =============================================
-   GUARDIAS MIR — APP.JS v2
-   Todas las correcciones aplicadas
+   GUARDIAS MIR — APP.JS v3
    ============================================= */
 
 // ============================================================
 // ESTADO GLOBAL
 // ============================================================
 const STATE = {
-  session: null,       // { name, level, rol }
+  session: null,
   viewYear: null,
-  viewMonth: null,     // 0-based
-  // currentDay/Month/Year del modal abierto
-  modalDay: null,
-  modalMonthKey: null,
+  viewMonth: null,
+  // Drag & drop
+  drag: null,   // { name, level, fromKey, fromDay }
+  // Simulated day (DEV)
+  fakeDay: null,
+  // Modal
+  addModalDay: null,
+  addModalKey: null,
 };
 
-// Clave settings DEV
 const SETTINGS_KEY = 'mir_settings';
 
 // ============================================================
-// STORAGE HELPERS
+// SETTINGS DEFAULTS
 // ============================================================
-function loadGuardias() {
-  try { return JSON.parse(localStorage.getItem('guardias')) || {}; }
-  catch { return {}; }
+function defaultSettings() {
+  return {
+    allowR1R2:    false,   // R1/R2 pueden proponer
+    levelMix:     true,    // Requerir mezcla R3/R4+R1/R2
+    limitWeek:    true,    // Entre semana máx 2
+    limitMon:     true,    // Lunes máx 3
+    limitSat:     true,    // Sábado máx 3
+    limitSun:     true,    // Domingo máx 3
+    deadlineOn:   true,    // Bloquear propuestas mes sig. tras día 15
+  };
 }
+
+// ============================================================
+// STORAGE
+// ============================================================
+function loadGuardias() { try { return JSON.parse(localStorage.getItem('guardias')) || {}; } catch { return {}; } }
 function saveGuardias(d) { localStorage.setItem('guardias', JSON.stringify(d)); }
-
-function loadBackup() {
-  try { return JSON.parse(localStorage.getItem('guardias_backup')) || null; }
-  catch { return null; }
-}
-function saveBackup(d) { localStorage.setItem('guardias_backup', JSON.stringify(d)); }
-
-function loadUsers() {
-  try { return JSON.parse(localStorage.getItem('mir_users')) || []; }
-  catch { return []; }
-}
-function saveUsers(u) { localStorage.setItem('mir_users', JSON.stringify(u)); }
-
-function loadApproved() {
-  try { return JSON.parse(localStorage.getItem('mir_approved')) || {}; }
-  catch { return {}; }
-}
+function loadBackup()    { try { return JSON.parse(localStorage.getItem('guardias_backup')) || null; } catch { return null; } }
+function saveBackup(d)   { localStorage.setItem('guardias_backup', JSON.stringify(d)); }
+function loadUsers()     { try { return JSON.parse(localStorage.getItem('mir_users')) || []; } catch { return []; } }
+function saveUsers(u)    { localStorage.setItem('mir_users', JSON.stringify(u)); }
+function loadApproved()  { try { return JSON.parse(localStorage.getItem('mir_approved')) || {}; } catch { return {}; } }
 function saveApproved(d) { localStorage.setItem('mir_approved', JSON.stringify(d)); }
-
-function loadSettings() {
-  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || { allowR1R2: false }; }
-  catch { return { allowR1R2: false }; }
-}
+function loadSettings()  { try { return Object.assign({}, defaultSettings(), JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch { return defaultSettings(); } }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
 // ============================================================
@@ -56,133 +54,98 @@ function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
 // ============================================================
 function ensureDefaultAdmin() {
   let users = loadUsers();
-  const hasAdmin = users.some(u => u.rol === 'admin');
-  if (!hasAdmin) {
+  if (!users.some(u => u.rol === 'admin')) {
     users.push({ name: 'Admin', level: 'R4', rol: 'admin', pass: 'admin123' });
     saveUsers(users);
   }
 }
 
 // ============================================================
-// HELPERS DE FECHA
+// FECHA (con soporte fakeDay para DEV)
 // ============================================================
-function today() { return new Date(); }
-function monthKey(year, month) { return `${year}-${String(month + 1).padStart(2, '0')}`; }
+function today() {
+  const real = new Date();
+  if (STATE.fakeDay !== null) {
+    return new Date(real.getFullYear(), real.getMonth(), STATE.fakeDay);
+  }
+  return real;
+}
+function monthKey(y, m) { return `${y}-${String(m + 1).padStart(2, '0')}`; }
+function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+function firstDayOfMonth(y, m) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
 
-function isWeekendOrMonday(year, month, day) {
-  const wd = new Date(year, month, day).getDay(); // 0=Dom,1=Lun,6=Sab
-  return wd === 0 || wd === 1 || wd === 6;
-}
-function maxGuardsForDay(year, month, day) {
-  return isWeekendOrMonday(year, month, day) ? 3 : 2;
-}
-function daysInMonth(year, month) {
-  return new Date(year, month + 1, 0).getDate();
-}
-function firstDayOfMonth(year, month) {
-  const d = new Date(year, month, 1).getDay();
-  return d === 0 ? 6 : d - 1; // Lunes=0
-}
+function dayOfWeek(y, m, d) { return new Date(y, m, d).getDay(); } // 0=Dom,1=Lun,6=Sab
 
 // ============================================================
-// VALIDACIÓN DÍAS INPUT
-// Acepta solo números enteros separados por comas
+// REGLAS DE CAPACIDAD (respetan settings)
 // ============================================================
-function parseDaysInput(raw, year, month) {
-  const maxDay = daysInMonth(year, month);
+function maxGuardsForDay(y, m, d) {
+  const s = loadSettings();
+  const wd = dayOfWeek(y, m, d);
+  if (wd === 1 && s.limitMon)  return 3;
+  if (wd === 6 && s.limitSat)  return 3;
+  if (wd === 0 && s.limitSun)  return 3;
+  if (s.limitWeek) return 2;
+  // Si todos los límites están desactivados → ilimitado en la práctica (usamos 99)
+  return 99;
+}
+
+function isDaySpecial(y, m, d) {
+  // "especial" = lunes/sáb/dom con límite 3 activo
+  const s = loadSettings();
+  const wd = dayOfWeek(y, m, d);
+  return (wd === 1 && s.limitMon) || (wd === 6 && s.limitSat) || (wd === 0 && s.limitSun);
+}
+
+function hasRequiredLevelMix(guards) {
+  if (guards.length < 2) return false;
+  return guards.some(g => g.level === 'R3' || g.level === 'R4') &&
+         guards.some(g => g.level === 'R1' || g.level === 'R2');
+}
+
+function canPropose(level) {
+  if (level === 'R3' || level === 'R4') return true;
+  return loadSettings().allowR1R2;
+}
+
+// ============================================================
+// VALIDACIÓN INPUT DÍAS
+// ============================================================
+function parseDaysInput(raw, y, m) {
+  const maxDay = daysInMonth(y, m);
   const result = { valid: [], errors: [] };
-
-  // Rechazar si hay letras o símbolos no permitidos (solo dígitos, comas y espacios)
-  if (/[^0-9,\s]/.test(raw)) {
-    result.errors.push('Solo se permiten números separados por comas.');
-    return result;
-  }
-
+  if (/[^0-9,\s]/.test(raw)) { result.errors.push('Solo números separados por comas.'); return result; }
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
-  if (parts.length === 0) {
-    result.errors.push('Introduce al menos un día.');
-    return result;
-  }
-
+  if (!parts.length) { result.errors.push('Introduce al menos un día.'); return result; }
   const seen = new Set();
   for (const p of parts) {
-    if (!/^\d+$/.test(p)) {
-      result.errors.push(`"${p}" no es un número válido.`);
-      continue;
-    }
+    if (!/^\d+$/.test(p)) { result.errors.push(`"${p}" no válido.`); continue; }
     const n = parseInt(p, 10);
-    if (n < 1 || n > maxDay) {
-      result.errors.push(`Día ${n} fuera de rango (1–${maxDay}).`);
-      continue;
-    }
-    if (seen.has(n)) {
-      result.errors.push(`Día ${n} duplicado.`);
-      continue;
-    }
-    seen.add(n);
-    result.valid.push(n);
+    if (n < 1 || n > maxDay) { result.errors.push(`Día ${n} fuera de rango (1–${maxDay}).`); continue; }
+    if (seen.has(n)) { result.errors.push(`Día ${n} duplicado.`); continue; }
+    seen.add(n); result.valid.push(n);
   }
   return result;
 }
 
 // ============================================================
-// REGLAS DE NIVELES
-// ============================================================
-function hasRequiredLevelMix(guards) {
-  if (guards.length < 2) return false;
-  const senior = guards.some(g => g.level === 'R3' || g.level === 'R4');
-  const junior = guards.some(g => g.level === 'R1' || g.level === 'R2');
-  return senior && junior;
-}
-
-// ¿Puede este usuario proponer? (R1/R2 bloqueados salvo setting activo)
-function canPropose(level) {
-  if (level === 'R3' || level === 'R4') return true;
-  const s = loadSettings();
-  return s.allowR1R2 === true;
-}
-
-// ============================================================
-// DEV MODE TRIGGER (triple clic en esquina)
+// DEV TRIGGER (triple clic esquina)
 // ============================================================
 function setupDevTrigger() {
-  const el = document.getElementById('dev-trigger');
-
-  if (!el) {
-    console.warn('dev-trigger no encontrado');
-    return;
-  }
-
-  let clicks = 0;
-  let timer = null;
-
-  el.addEventListener('click', () => {
-    console.log('click dev trigger'); // 👈 DEBUG
-
+  let clicks = 0, timer = null;
+  document.getElementById('dev-trigger').addEventListener('click', () => {
     clicks++;
     clearTimeout(timer);
-
-    timer = setTimeout(() => { clicks = 0; }, 1200);
-
-    if (clicks >= 3) {
-      clicks = 0;
-      console.log('DEV MODE ACTIVADO'); // 👈 DEBUG
-      toggleDevTab();
-    }
+    timer = setTimeout(() => { clicks = 0; }, 800);
+    if (clicks >= 3) { clicks = 0; toggleDevPanel(); }
   });
 }
-
-function toggleDevTab() {
+function toggleDevPanel() {
   const tab = document.getElementById('tab-dev');
-  const isVisible = tab.classList.contains('dev-visible');
-  if (isVisible) {
-    tab.classList.remove('dev-visible');
-    tab.classList.add('tab-dev-hidden');
-  } else {
-    tab.classList.remove('tab-dev-hidden');
-    tab.classList.add('dev-visible');
-    renderDevLoginList();
-  }
+  const visible = tab.classList.contains('dev-visible');
+  tab.classList.toggle('dev-visible', !visible);
+  tab.classList.toggle('tab-dev-hidden', visible);
+  if (!visible) renderDevLoginList();
 }
 
 // ============================================================
@@ -192,118 +155,101 @@ function setupLogin() {
   ensureDefaultAdmin();
   setupDevTrigger();
 
-  // Tabs normales
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      // Solo ocultar tabs normales (no el dev)
-      document.getElementById('tab-user').classList.remove('active');
-      document.getElementById('tab-admin').classList.remove('active');
-      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-    });
+  const nameEl  = document.getElementById('login-name');
+  const levelEl = document.getElementById('login-level');
+  const passGrp = document.getElementById('login-admin-pass-group');
+  const passEl  = document.getElementById('login-pass');
+
+  // Mostrar campo pass si nombre coincide con admin
+  nameEl.addEventListener('input', () => {
+    const name = nameEl.value.trim();
+    const users = loadUsers();
+    const isAdmin = users.some(u => u.name === name && u.rol === 'admin');
+    passGrp.classList.toggle('hidden', !isAdmin);
+    if (isAdmin) { levelEl.closest('.form-group').classList.add('hidden'); }
+    else         { levelEl.closest('.form-group').classList.remove('hidden'); }
   });
 
-  // Login usuario
-  document.getElementById('btn-login-user').addEventListener('click', loginUser);
-  document.getElementById('login-user-name').addEventListener('keydown', e => { if (e.key === 'Enter') loginUser(); });
-  document.getElementById('login-user-level').addEventListener('keydown', e => { if (e.key === 'Enter') loginUser(); });
+  document.getElementById('btn-login-user').addEventListener('click', doLogin);
+  nameEl.addEventListener('keydown',  e => { if (e.key === 'Enter') doLogin(); });
+  passEl.addEventListener('keydown',  e => { if (e.key === 'Enter') doLogin(); });
 
-  // Login admin
-  document.getElementById('btn-login-admin').addEventListener('click', loginAdmin);
-  document.getElementById('login-admin-pass').addEventListener('keydown', e => { if (e.key === 'Enter') loginAdmin(); });
-
-  // Login DEV
-  document.getElementById('btn-login-dev').addEventListener('click', () => {
-    startSession({ name: 'DEV', level: 'R4', rol: 'dev' });
-  });
-
-  // Crear usuario rápido desde login DEV
+  // DEV
+  document.getElementById('btn-login-dev').addEventListener('click', () => startSession({ name: 'DEV', level: 'R4', rol: 'dev' }));
   document.getElementById('btn-dev-quick-create').addEventListener('click', devQuickCreate);
+
+  // DEV fake day (en login)
+  document.getElementById('btn-dev-apply-date').addEventListener('click', () => {
+    const v = parseInt(document.getElementById('dev-fake-day').value, 10);
+    if (isNaN(v) || v < 1 || v > 31) { document.getElementById('dev-fake-day-status').textContent = '❌ Día inválido.'; return; }
+    STATE.fakeDay = v;
+    document.getElementById('dev-fake-day-status').textContent = `✅ Día simulado: ${v}`;
+  });
+  document.getElementById('btn-dev-reset-date').addEventListener('click', () => {
+    STATE.fakeDay = null;
+    document.getElementById('dev-fake-day').value = '';
+    document.getElementById('dev-fake-day-status').textContent = 'Usando fecha real.';
+  });
 }
 
-function loginUser() {
-  const name = document.getElementById('login-user-name').value.trim();
-  const level = document.getElementById('login-user-level').value;
-  if (!name) return showLoginError('Introduce tu nombre completo.');
-  if (!level) return showLoginError('Selecciona tu nivel MIR.');
+function doLogin() {
+  const name  = document.getElementById('login-name').value.trim();
+  const level = document.getElementById('login-level').value;
+  const pass  = document.getElementById('login-pass').value;
 
-  let users = loadUsers();
-  const existing = users.find(u => u.name === name && u.rol === 'user');
-  if (!existing) {
+  if (!name) { showLoginError('Introduce tu nombre.'); return; }
+
+  const users = loadUsers();
+  const admin = users.find(u => u.name === name && u.rol === 'admin');
+
+  if (admin) {
+    // Login admin
+    if (admin.pass && admin.pass !== pass) { showLoginError('Contraseña incorrecta.'); return; }
+    startSession({ name: admin.name, level: admin.level || 'R4', rol: 'admin' });
+    return;
+  }
+
+  // Login usuario normal
+  if (!level) { showLoginError('Selecciona tu nivel MIR.'); return; }
+  if (!users.some(u => u.name === name && u.rol === 'user')) {
     users.push({ name, level, rol: 'user' });
     saveUsers(users);
   }
   startSession({ name, level, rol: 'user' });
 }
 
-function loginAdmin() {
-  const name = document.getElementById('login-admin-name').value.trim();
-  const pass = document.getElementById('login-admin-pass').value;
-  if (!name) return showLoginError('Introduce el nombre de administrador.');
-  const users = loadUsers();
-  const admin = users.find(u => u.name === name && u.rol === 'admin');
-  if (!admin) return showLoginError('Administrador no encontrado.');
-  if (admin.pass && admin.pass !== pass) return showLoginError('Contraseña incorrecta.');
-  startSession({ name: admin.name, level: admin.level || 'R4', rol: 'admin' });
-}
-
 function devQuickCreate() {
-  const name = document.getElementById('dev-quick-name').value.trim();
+  const name  = document.getElementById('dev-quick-name').value.trim();
   const level = document.getElementById('dev-quick-level').value;
-  const rol = document.getElementById('dev-quick-rol').value;
-  if (!name) { showLoginError('Introduce un nombre para el usuario.'); return; }
-
+  const rol   = document.getElementById('dev-quick-rol').value;
+  if (!name) { showLoginError('Introduce un nombre.'); return; }
   let users = loadUsers();
-  if (users.some(u => u.name === name)) { showLoginError('Ya existe un usuario con ese nombre.'); return; }
-
+  if (users.some(u => u.name === name)) { showLoginError('Nombre ya existente.'); return; }
   const u = { name, level, rol };
   if (rol === 'admin') u.pass = 'admin123';
   users.push(u);
   saveUsers(users);
   document.getElementById('dev-quick-name').value = '';
   renderDevLoginList();
-  // Entrar directamente
   startSession({ name, level, rol });
 }
 
 function renderDevLoginList() {
   const users = loadUsers();
   const el = document.getElementById('dev-login-users-list');
-  if (users.length === 0) {
-    el.innerHTML = '<p style="color:#444;font-size:11px;text-align:center;padding:6px 0">Sin usuarios registrados</p>';
-    return;
-  }
+  if (!users.length) { el.innerHTML = '<p style="color:#444;font-size:11px;text-align:center">Sin usuarios</p>'; return; }
   el.innerHTML = users.map((u, i) => `
     <div class="dev-login-user-item">
-      <span class="info"><strong>${u.name}</strong> ${u.level ? `· ${u.level}` : ''}</span>
+      <span class="info"><strong>${escHtml(u.name)}</strong> ${u.level ? '· '+u.level : ''}</span>
       <span class="dev-login-user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span>
       <div style="display:flex;gap:3px">
         <button class="btn-switch-login" onclick="devLoginAs(${i})">Entrar</button>
-        <button class="btn-del-login" onclick="devDeleteFromLogin(${i})">✕</button>
+        <button class="btn-del-login"    onclick="devDelFromLogin(${i})">✕</button>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
-
-function devLoginAs(i) {
-  const users = loadUsers();
-  const u = users[i];
-  if (u) startSession({ name: u.name, level: u.level || 'R4', rol: u.rol });
-}
-
-function devDeleteFromLogin(i) {
-  let users = loadUsers();
-  const u = users[i];
-  if (!u) return;
-  if (u.rol === 'admin' && users.filter(x => x.rol === 'admin').length <= 1) {
-    showLoginError('Debe existir al menos 1 administrador.');
-    return;
-  }
-  users.splice(i, 1);
-  saveUsers(users);
-  renderDevLoginList();
-}
+function devLoginAs(i)     { const u = loadUsers()[i]; if (u) startSession({ name: u.name, level: u.level||'R4', rol: u.rol }); }
+function devDelFromLogin(i){ let u = loadUsers(); const x = u[i]; if (!x) return; if (x.rol==='admin' && u.filter(a=>a.rol==='admin').length<=1){ showLoginError('Mínimo 1 admin.'); return; } u.splice(i,1); saveUsers(u); renderDevLoginList(); }
 
 function showLoginError(msg) {
   const el = document.getElementById('login-error');
@@ -314,12 +260,12 @@ function showLoginError(msg) {
 // ============================================================
 // SESIÓN
 // ============================================================
-let navigationSetup = false;
+let navReady = false;
 
-function startSession(session) {
-  STATE.session = session;
+function startSession(sess) {
+  STATE.session = sess;
   const now = today();
-  STATE.viewYear = now.getFullYear();
+  STATE.viewYear  = now.getFullYear();
   STATE.viewMonth = now.getMonth();
 
   document.getElementById('login-screen').classList.add('hidden');
@@ -329,33 +275,23 @@ function startSession(session) {
   renderSidebar();
   renderCalendar();
 
-  if (!navigationSetup) {
-    setupNavigation();
-    navigationSetup = true;
-  }
+  if (!navReady) { setupNavigation(); navReady = true; }
 }
 
 function logout() {
   STATE.session = null;
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
-
-  // Limpiar campos
-  document.getElementById('login-user-name').value = '';
-  document.getElementById('login-user-level').value = '';
-  document.getElementById('login-admin-name').value = '';
-  document.getElementById('login-admin-pass').value = '';
+  document.getElementById('login-name').value  = '';
+  document.getElementById('login-level').value = '';
+  document.getElementById('login-pass').value  = '';
   document.getElementById('login-error').textContent = '';
-
-  // Resetear tabs
-  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
-  document.getElementById('tab-user').classList.add('active');
-  document.getElementById('tab-admin').classList.remove('active');
-
-  // Ocultar DEV tab
-  const devTab = document.getElementById('tab-dev');
-  devTab.classList.remove('dev-visible');
-  devTab.classList.add('tab-dev-hidden');
+  document.getElementById('login-admin-pass-group').classList.add('hidden');
+  document.getElementById('login-level').closest('.form-group').classList.remove('hidden');
+  // Ocultar DEV panel
+  const tab = document.getElementById('tab-dev');
+  tab.classList.remove('dev-visible');
+  tab.classList.add('tab-dev-hidden');
 }
 
 // ============================================================
@@ -365,9 +301,8 @@ function renderTopbar() {
   const { session } = STATE;
   const rolEl = document.getElementById('topbar-rol');
   rolEl.textContent = session.rol.toUpperCase();
-  rolEl.className = `topbar-rol rol-${session.rol}`;
-  document.getElementById('topbar-user').textContent =
-    session.name + (session.level ? ` · ${session.level}` : '');
+  rolEl.className   = `topbar-rol rol-${session.rol}`;
+  document.getElementById('topbar-user').textContent = session.name + (session.level ? ` · ${session.level}` : '');
 }
 
 // ============================================================
@@ -376,139 +311,92 @@ function renderTopbar() {
 function renderSidebar() {
   const { session } = STATE;
   const rol = session.rol;
-  const isAdminOrDev = rol === 'admin' || rol === 'dev';
+  const isAdm = rol === 'admin' || rol === 'dev';
 
-  // Visibilidad de cards
-  document.getElementById('admin-card').classList.toggle('hidden', !isAdminOrDev);
+  document.getElementById('admin-card').classList.toggle('hidden', !isAdm);
   document.getElementById('dev-card').classList.toggle('hidden', rol !== 'dev');
-  document.getElementById('users-card').classList.toggle('hidden', !isAdminOrDev);
+  document.getElementById('users-card').classList.toggle('hidden', !isAdm);
+  document.getElementById('cal-hint').classList.toggle('hidden', !isAdm);
 
-  // Formulario propuesta: siempre visible, estado según condiciones
-  document.getElementById('prop-name').value = session.name;
+  document.getElementById('prop-name').value  = session.name;
   document.getElementById('prop-level').value = session.level;
 
-  // Toggle R1/R2 (DEV)
-  if (rol === 'dev') {
-    const settings = loadSettings();
-    document.getElementById('toggle-r1r2').checked = settings.allowR1R2;
-  }
-
+  if (rol === 'dev') syncDevToggles();
   updateFormState();
+  if (isAdm) { renderUsersList(); if (rol === 'dev') renderDevSwitchList(); }
 
-  if (isAdminOrDev) {
-    renderUsersList();
-    if (rol === 'dev') renderDevSwitchList();
-  }
-
-  // Admin status
-  if (isAdminOrDev) {
-    const approved = loadApproved();
+  if (isAdm) {
     const key = monthKey(STATE.viewYear, STATE.viewMonth);
+    const approved = loadApproved();
     document.getElementById('admin-status').textContent =
-      approved[key] ? '✅ Mes aprobado' : '📋 Mes pendiente de aprobación';
+      approved[key] ? '✅ Mes aprobado' : '📋 Mes pendiente';
   }
 }
 
-// Actualiza el estado del formulario según mes visible y usuario
+function syncDevToggles() {
+  const s = loadSettings();
+  document.getElementById('toggle-r1r2').checked       = s.allowR1R2;
+  document.getElementById('toggle-level-mix').checked  = s.levelMix;
+  document.getElementById('toggle-limit-week').checked = s.limitWeek;
+  document.getElementById('toggle-limit-mon').checked  = s.limitMon;
+  document.getElementById('toggle-limit-sat').checked  = s.limitSat;
+  document.getElementById('toggle-limit-sun').checked  = s.limitSun;
+  document.getElementById('toggle-deadline').checked   = s.deadlineOn;
+}
+
 function updateFormState() {
   const { session, viewYear, viewMonth } = STATE;
   const now = today();
-  const curYear = now.getFullYear();
-  const curMonth = now.getMonth();
-  const curDay = now.getDate();
+  const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate();
+  const s = loadSettings();
 
-  const isCurrentMonth = viewYear === curYear && viewMonth === curMonth;
-  const isNextMonth = (viewYear > curYear) || (viewYear === curYear && viewMonth > curMonth);
+  const isNextMonth = (viewYear > curY) || (viewYear === curY && viewMonth > curM);
+  const isCurrentMonth = viewYear === curY && viewMonth === curM;
 
-  const deadlineWarn = document.getElementById('form-deadline-warning');
-  const currentInfo = document.getElementById('form-current-month-info');
-  const submitBtn = document.getElementById('btn-submit-prop');
+  const warnEl = document.getElementById('form-deadline-warning');
+  const infoEl = document.getElementById('form-current-month-info');
+  const btn    = document.getElementById('btn-submit-prop');
 
-  deadlineWarn.classList.add('hidden');
-  currentInfo.classList.add('hidden');
+  warnEl.classList.add('hidden');
+  infoEl.classList.add('hidden');
+  btn.disabled = false;
 
-  let blocked = false;
-
-  // Bloquear R1/R2 si setting no activo
   if (!canPropose(session.level)) {
-    blocked = true;
-    deadlineWarn.classList.remove('hidden');
-    deadlineWarn.textContent = 'ℹ️ Tu nivel (' + session.level + ') no tiene permiso para proponer guardias en este momento. El administrador puede activar esta opción.';
-  } else if (isNextMonth) {
-    // Propuestas mes siguiente: solo del día 1 al 15 del mes actual
-    if (curDay > 15) {
-      blocked = true;
-      deadlineWarn.classList.remove('hidden');
-      deadlineWarn.textContent = '⚠️ Fuera de plazo. Las propuestas del mes siguiente se cierran el día 15 del mes actual.';
-    }
-    // Si curDay <= 15 está bien, puede proponer
-  } else if (isCurrentMonth) {
-    currentInfo.classList.remove('hidden');
+    warnEl.classList.remove('hidden');
+    warnEl.textContent = `ℹ️ Tu nivel (${session.level}) no tiene permiso para proponer. El DEV puede activarlo.`;
+    btn.disabled = true;
+    return;
   }
-
-  submitBtn.disabled = blocked;
+  if (isNextMonth && s.deadlineOn && curD > 15) {
+    warnEl.classList.remove('hidden');
+    warnEl.textContent = '⚠️ Plazo cerrado. Las propuestas del mes siguiente se cierran el día 15 del mes actual.';
+    btn.disabled = true;
+    return;
+  }
+  if (isCurrentMonth) infoEl.classList.remove('hidden');
 }
 
 function renderUsersList() {
   const users = loadUsers();
+  document.getElementById('users-count-badge').textContent = users.length;
   const el = document.getElementById('users-list');
-  const badge = document.getElementById('users-count-badge');
-  badge.textContent = users.length;
-
-  if (users.length === 0) {
-    el.innerHTML = '<p style="color:#444;font-size:12px;text-align:center;padding:4px 0">Sin usuarios</p>';
-    return;
-  }
-  el.innerHTML = users.map(u => `
-    <div class="user-item">
-      <span class="user-item-name">${u.name} <small>${u.level || ''}</small></span>
-      <span class="user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span>
-    </div>
-  `).join('');
+  el.innerHTML = users.length
+    ? users.map(u => `<div class="user-item"><span class="user-item-name">${escHtml(u.name)} <small>${u.level||''}</small></span><span class="user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span></div>`).join('')
+    : '<p style="color:#444;font-size:12px;text-align:center;padding:4px 0">Sin usuarios</p>';
 }
 
 function renderDevSwitchList() {
   const users = loadUsers();
   const el = document.getElementById('dev-user-switch-list');
-  if (users.length === 0) {
-    el.innerHTML = '<p style="color:#444;font-size:11px">Sin usuarios</p>';
-    return;
-  }
-  el.innerHTML = users.map((u, i) => `
-    <div class="switch-item">
-      <span class="info"><strong>${u.name}</strong> ${u.level ? `· ${u.level}` : ''} <span class="dev-login-user-badge badge-${u.rol}">${u.rol}</span></span>
-      <button class="btn-switch" onclick="devSwitchInApp(${i})">Entrar</button>
-      <button class="btn-del" onclick="devDeleteInApp(${i})">✕</button>
-    </div>
-  `).join('');
+  el.innerHTML = users.length
+    ? users.map((u, i) => `<div class="switch-item"><span class="info"><strong>${escHtml(u.name)}</strong> ${u.level?'·'+u.level:''} <span class="dev-login-user-badge badge-${u.rol}">${u.rol}</span></span><button class="btn-switch" onclick="devSwitchInApp(${i})">Entrar</button><button class="btn-del" onclick="devDelInApp(${i})">✕</button></div>`).join('')
+    : '<p style="color:#444;font-size:11px">Sin usuarios</p>';
 }
-
-function devSwitchInApp(i) {
-  const users = loadUsers();
-  const u = users[i];
-  if (!u) return;
-  STATE.session = { name: u.name, level: u.level || 'R4', rol: u.rol };
-  renderTopbar();
-  renderSidebar();
-  renderCalendar();
-}
-
-function devDeleteInApp(i) {
-  let users = loadUsers();
-  const u = users[i];
-  if (!u) return;
-  if (u.rol === 'admin' && users.filter(x => x.rol === 'admin').length <= 1) {
-    alert('Debe existir al menos 1 administrador.');
-    return;
-  }
-  users.splice(i, 1);
-  saveUsers(users);
-  renderDevSwitchList();
-  renderUsersList();
-}
+function devSwitchInApp(i) { const u = loadUsers()[i]; if (!u) return; STATE.session = { name: u.name, level: u.level||'R4', rol: u.rol }; renderTopbar(); renderSidebar(); renderCalendar(); }
+function devDelInApp(i) { let u = loadUsers(); const x=u[i]; if(!x) return; if(x.rol==='admin'&&u.filter(a=>a.rol==='admin').length<=1){alert('Mínimo 1 admin.');return;} u.splice(i,1); saveUsers(u); renderDevSwitchList(); renderUsersList(); }
 
 // ============================================================
-// NAVEGACIÓN Y SETUP
+// NAVIGATION SETUP
 // ============================================================
 function setupNavigation() {
   document.getElementById('btn-prev').addEventListener('click', navPrev);
@@ -519,371 +407,420 @@ function setupNavigation() {
   document.getElementById('btn-reset').addEventListener('click', resetMonth);
   document.getElementById('btn-restore').addEventListener('click', restoreBackup);
   document.getElementById('btn-dev-create').addEventListener('click', devCreateUser);
-  document.getElementById('btn-export-pdf').addEventListener('click', exportPDF);
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('day-modal').addEventListener('click', e => {
-    if (e.target === document.getElementById('day-modal')) closeModal();
-  });
-  document.getElementById('btn-modal-add-guard').addEventListener('click', modalAddGuard);
+  document.getElementById('btn-export-pdf').addEventListener('click', () => window.print());
 
-  // Validación en tiempo real del input días
+  // Validación live input días
   document.getElementById('prop-days').addEventListener('input', () => {
     const raw = document.getElementById('prop-days').value;
     if (/[^0-9,\s]/.test(raw)) {
-      // Limpiar caracteres no permitidos automáticamente
       document.getElementById('prop-days').value = raw.replace(/[^0-9,\s]/g, '');
-      document.getElementById('prop-days-warning').textContent = 'Solo se permiten números separados por comas.';
-    } else {
-      document.getElementById('prop-days-warning').textContent = '';
-    }
+      document.getElementById('prop-days-warning').textContent = 'Solo números separados por comas.';
+    } else document.getElementById('prop-days-warning').textContent = '';
   });
-
-  // Límite prop-count 1-5
   document.getElementById('prop-count').addEventListener('input', () => {
     const v = parseInt(document.getElementById('prop-count').value, 10);
     if (v < 1) document.getElementById('prop-count').value = 1;
     if (v > 5) document.getElementById('prop-count').value = 5;
   });
 
-  // Toggle R1/R2
-  document.getElementById('toggle-r1r2').addEventListener('change', e => {
-    const s = loadSettings();
-    s.allowR1R2 = e.target.checked;
-    saveSettings(s);
-    updateFormState();
+  // DEV toggles
+  const toggleMap = {
+    'toggle-r1r2':       'allowR1R2',
+    'toggle-level-mix':  'levelMix',
+    'toggle-limit-week': 'limitWeek',
+    'toggle-limit-mon':  'limitMon',
+    'toggle-limit-sat':  'limitSat',
+    'toggle-limit-sun':  'limitSun',
+    'toggle-deadline':   'deadlineOn',
+  };
+  Object.entries(toggleMap).forEach(([id, key]) => {
+    document.getElementById(id).addEventListener('change', e => {
+      const s = loadSettings(); s[key] = e.target.checked; saveSettings(s);
+      updateFormState(); renderCalendar();
+    });
   });
+
+  // DEV fake day en app
+  document.getElementById('btn-dev-apply-date-app').addEventListener('click', () => {
+    const v = parseInt(document.getElementById('dev-fake-day-app').value, 10);
+    const st = document.getElementById('dev-fake-day-status-app');
+    if (isNaN(v)||v<1||v>31) { st.textContent='❌ Inválido.'; return; }
+    STATE.fakeDay = v; st.textContent = `✅ Simulando día ${v}`;
+    updateFormState(); renderCalendar();
+  });
+  document.getElementById('btn-dev-reset-date-app').addEventListener('click', () => {
+    STATE.fakeDay = null;
+    document.getElementById('dev-fake-day-app').value = '';
+    document.getElementById('dev-fake-day-status-app').textContent = 'Fecha real restaurada.';
+    updateFormState(); renderCalendar();
+  });
+
+  // Add modal
+  document.getElementById('add-modal-close').addEventListener('click', closeAddModal);
+  document.getElementById('add-modal').addEventListener('click', e => { if (e.target === document.getElementById('add-modal')) closeAddModal(); });
+  document.getElementById('btn-add-modal-confirm').addEventListener('click', confirmAddModal);
 }
 
 function navPrev() {
   const now = today();
   if (STATE.viewYear === now.getFullYear() && STATE.viewMonth === now.getMonth()) return;
-  STATE.viewMonth--;
-  if (STATE.viewMonth < 0) { STATE.viewMonth = 11; STATE.viewYear--; }
-  renderCalendar();
-  updateFormState();
+  STATE.viewMonth--; if (STATE.viewMonth < 0) { STATE.viewMonth = 11; STATE.viewYear--; }
+  renderCalendar(); updateFormState();
 }
-
 function navNext() {
-  const now = today();
-  let ny = now.getFullYear(), nm = now.getMonth() + 1;
-  if (nm > 11) { nm = 0; ny++; }
-  if (STATE.viewYear === ny && STATE.viewMonth === nm) return;
-  STATE.viewMonth++;
-  if (STATE.viewMonth > 11) { STATE.viewMonth = 0; STATE.viewYear++; }
-  renderCalendar();
-  updateFormState();
+  const now = today(); let ny = now.getFullYear(), nm = now.getMonth()+1; if (nm>11){nm=0;ny++;}
+  if (STATE.viewYear===ny && STATE.viewMonth===nm) return;
+  STATE.viewMonth++; if (STATE.viewMonth>11){STATE.viewMonth=0;STATE.viewYear++;}
+  renderCalendar(); updateFormState();
 }
 
 // ============================================================
 // CALENDARIO
 // ============================================================
 function renderCalendar() {
-  const { viewYear, viewMonth } = STATE;
+  const { viewYear: y, viewMonth: m, session } = STATE;
   const now = today();
-  const curYear = now.getFullYear(), curMonth = now.getMonth();
+  const curY = now.getFullYear(), curM = now.getMonth();
 
-  // Limpiar meses pasados
-  cleanOldMonths(curYear, curMonth);
+  cleanOldMonths(curY, curM);
 
   // Título
-  const title = new Date(viewYear, viewMonth, 1)
-    .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-  document.getElementById('calendar-title').textContent =
-    title.charAt(0).toUpperCase() + title.slice(1);
+  const title = new Date(y, m, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  document.getElementById('calendar-title').textContent = title.charAt(0).toUpperCase() + title.slice(1);
 
-  // Navegar buttons
-  const prevBtn = document.getElementById('btn-prev');
-  const nextBtn = document.getElementById('btn-next');
-  prevBtn.disabled = (viewYear === curYear && viewMonth === curMonth);
-  let ny = curYear, nm = curMonth + 1;
-  if (nm > 11) { nm = 0; ny++; }
-  nextBtn.disabled = (viewYear === ny && viewMonth === nm);
+  // Nav buttons
+  document.getElementById('btn-prev').disabled = (y===curY && m===curM);
+  let ny=curY, nm=curM+1; if (nm>11){nm=0;ny++;}
+  document.getElementById('btn-next').disabled = (y===ny && m===nm);
 
   const guardias = loadGuardias();
-  const key = monthKey(viewYear, viewMonth);
+  const key = monthKey(y, m);
   const monthData = guardias[key] || {};
   const approved = loadApproved();
   const isApproved = !!approved[key];
+  const rol = session.rol;
+  const isAdm = rol === 'admin' || rol === 'dev';
 
-  const firstDay = firstDayOfMonth(viewYear, viewMonth);
-  const totalDays = daysInMonth(viewYear, viewMonth);
+  const firstDay = firstDayOfMonth(y, m);
+  const totalDays = daysInMonth(y, m);
   const totalCells = Math.ceil((firstDay + totalDays) / 7) * 7;
 
   const grid = document.getElementById('calendar-grid');
   grid.innerHTML = '';
 
   for (let i = 0; i < totalCells; i++) {
+    const dn = i - firstDay + 1;
     const cell = document.createElement('div');
-    const dayNum = i - firstDay + 1;
 
-    if (i < firstDay || dayNum > totalDays) {
+    if (i < firstDay || dn > totalDays) {
       cell.className = 'cal-day empty';
-    } else {
-      const dayGuards = monthData[String(dayNum)] || [];
-      const maxG = maxGuardsForDay(viewYear, viewMonth, dayNum);
-      const isToday = viewYear === curYear && viewMonth === curMonth && dayNum === now.getDate();
-      const isWknd = isWeekendOrMonday(viewYear, viewMonth, dayNum);
-      const isFull = dayGuards.length >= maxG;
+      grid.appendChild(cell); continue;
+    }
 
-      cell.className = [
-        'cal-day',
-        isToday ? 'today' : '',
-        isWknd ? 'weekend' : '',
-        isFull ? 'full-day' : '',
-      ].filter(Boolean).join(' ');
+    const dayGuards = monthData[String(dn)] || [];
+    const maxG = maxGuardsForDay(y, m, dn);
+    const isFull = dayGuards.length >= maxG;
+    const isToday = y===curY && m===curM && dn===now.getDate();
+    const isWknd  = [0,6].includes(dayOfWeek(y,m,dn));
+    const isSpecial = isDaySpecial(y, m, dn);
 
-      const numEl = document.createElement('div');
-      numEl.className = 'day-num';
-      numEl.textContent = dayNum;
-      cell.appendChild(numEl);
+    cell.className = ['cal-day',
+      isToday ? 'today' : '',
+      isWknd  ? 'weekend' : '',
+      isFull  ? 'full-day' : '',
+      isAdm   ? 'can-interact can-dblclick' : 'can-interact',
+    ].filter(Boolean).join(' ');
 
-      if (isFull) {
-        const badge = document.createElement('span');
-        badge.className = 'day-full-badge';
-        badge.textContent = 'LLENO';
-        cell.appendChild(badge);
+    // Número día
+    const numEl = document.createElement('div');
+    numEl.className = 'day-num';
+    numEl.textContent = dn;
+    cell.appendChild(numEl);
+
+    // Badge "LLENO" (solo en pantalla, no en print)
+    if (isFull && maxG < 99) {
+      const badge = document.createElement('span');
+      badge.className = 'day-full-badge';
+      badge.textContent = 'LLENO';
+      cell.appendChild(badge);
+    }
+
+    // Guard chips
+    dayGuards.forEach((g, idx) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'guard-chip-wrap';
+
+      const chip = document.createElement('span');
+      chip.className = `guard-chip ${isApproved ? 'approved' : 'pending'}`;
+      chip.textContent = `${g.name} (${g.level})`;
+      chip.title = `${g.name} · ${g.level}`;
+      wrap.appendChild(chip);
+
+      if (isAdm) {
+        // Drag handle
+        chip.draggable = true;
+        chip.addEventListener('dragstart', e => {
+          STATE.drag = { name: g.name, level: g.level, fromKey: key, fromDay: dn, fromIdx: idx };
+          chip.classList.add('dragging');
+          // Actualizar ghost
+          const ghost = document.getElementById('drag-ghost');
+          ghost.textContent = `${g.name} (${g.level})`;
+          ghost.classList.remove('hidden');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        chip.addEventListener('dragend', () => {
+          chip.classList.remove('dragging');
+          document.getElementById('drag-ghost').classList.add('hidden');
+          STATE.drag = null;
+          // Limpiar drag-over
+          document.querySelectorAll('.cal-day.drag-over').forEach(c => c.classList.remove('drag-over'));
+        });
+
+        // Botón X
+        const xBtn = document.createElement('button');
+        xBtn.className = 'chip-delete-btn';
+        xBtn.title = 'Eliminar guardia';
+        xBtn.innerHTML = '✕';
+        xBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          deleteGuard(key, dn, idx);
+        });
+        wrap.appendChild(xBtn);
       }
 
-      dayGuards.forEach(g => {
-        const chip = document.createElement('span');
-        chip.className = `guard-chip ${isApproved ? 'approved' : 'pending'}`;
-        chip.textContent = `${g.name} (${g.level})`;
-        chip.title = `${g.name} · ${g.level}`;
-        cell.appendChild(chip);
-      });
+      cell.appendChild(wrap);
+    });
 
-      const d = dayNum;
-      cell.addEventListener('click', () => openDayModal(d, isApproved, key, maxG));
+    // Drop target
+    if (isAdm) {
+      cell.addEventListener('dragover', e => {
+        e.preventDefault();
+        if (STATE.drag) cell.classList.add('drag-over');
+      });
+      cell.addEventListener('dragleave', () => cell.classList.remove('drag-over'));
+      cell.addEventListener('drop', e => {
+        e.preventDefault();
+        cell.classList.remove('drag-over');
+        if (STATE.drag) dropGuard(dn, key);
+      });
+      // Doble clic = añadir guardia
+      cell.addEventListener('dblclick', () => openAddModal(dn, key, maxG));
     }
+
     grid.appendChild(cell);
   }
 
-  // PDF section
-  const rol = STATE.session.rol;
-  const pdfSection = document.getElementById('pdf-section');
-  pdfSection.classList.toggle('hidden', !(isApproved && (rol === 'admin' || rol === 'dev')));
+  // Ghost mouse follow
+  document.onmousemove = e => {
+    const ghost = document.getElementById('drag-ghost');
+    if (!ghost.classList.contains('hidden')) {
+      ghost.style.left = e.clientX + 'px';
+      ghost.style.top  = (e.clientY - 20) + 'px';
+    }
+  };
+
+  // PDF
+  document.getElementById('pdf-section').classList.toggle('hidden', !(isApproved && isAdm));
 
   // Admin status
-  if (rol === 'admin' || rol === 'dev') {
+  if (isAdm) {
     document.getElementById('admin-status').textContent =
-      isApproved ? '✅ Mes aprobado' : '📋 Mes pendiente de aprobación';
+      isApproved ? '✅ Mes aprobado' : '📋 Mes pendiente';
   }
 }
 
-function cleanOldMonths(curYear, curMonth) {
-  const guardias = loadGuardias();
-  const approved = loadApproved();
-  let changed = false;
-  [...Object.keys(guardias), ...Object.keys(approved)].forEach(k => {
+function cleanOldMonths(curY, curM) {
+  const g = loadGuardias(), a = loadApproved(); let ch = false;
+  [...Object.keys(g), ...Object.keys(a)].forEach(k => {
     const [y, m] = k.split('-').map(Number);
-    if (y < curYear || (y === curYear && m - 1 < curMonth)) {
-      delete guardias[k];
-      delete approved[k];
-      changed = true;
-    }
+    if (y < curY || (y===curY && m-1 < curM)) { delete g[k]; delete a[k]; ch = true; }
   });
-  if (changed) { saveGuardias(guardias); saveApproved(approved); }
+  if (ch) { saveGuardias(g); saveApproved(a); }
 }
 
 // ============================================================
-// MODAL DÍA
+// DRAG & DROP
 // ============================================================
-function openDayModal(day, isApproved, key, maxG) {
-  STATE.modalDay = day;
-  STATE.modalMonthKey = key;
-
-  const { session } = STATE;
-  const rol = session.rol;
-  const isAdminOrDev = rol === 'admin' || rol === 'dev';
+function dropGuard(toDay, toKey) {
+  const drag = STATE.drag;
+  if (!drag) return;
 
   const guardias = loadGuardias();
-  const dayGuards = (guardias[key] || {})[String(day)] || [];
+  const { fromKey, fromDay, fromIdx, name, level } = drag;
 
-  const isWknd = isWeekendOrMonday(STATE.viewYear, STATE.viewMonth, day);
-  const typeLabel = isWknd ? '(L/S/D — máx 3)' : '(máx 2)';
-  document.getElementById('modal-day-title').textContent =
-    `Día ${day} — ${new Date(STATE.viewYear, STATE.viewMonth, day).toLocaleDateString('es-ES', { weekday: 'long' })} ${typeLabel}`;
+  // Si caemos en el mismo día, no hacer nada
+  if (fromKey === toKey && fromDay === toDay) return;
 
-  // Lista guardias
-  const listEl = document.getElementById('modal-guards-list');
-  listEl.innerHTML = '';
+  const src = (guardias[fromKey]||{})[String(fromDay)];
+  if (!src) return;
 
-  if (dayGuards.length === 0) {
-    listEl.innerHTML = '<p style="color:#555;font-size:13px;text-align:center;padding:4px 0">Sin guardias asignadas</p>';
+  // Eliminar del origen
+  src.splice(fromIdx, 1);
+  if (!src.length) delete guardias[fromKey][String(fromDay)];
+
+  // Añadir al destino
+  if (!guardias[toKey]) guardias[toKey] = {};
+  if (!guardias[toKey][String(toDay)]) guardias[toKey][String(toDay)] = [];
+  const dest = guardias[toKey][String(toDay)];
+  const maxG = maxGuardsForDay(STATE.viewYear, STATE.viewMonth, toDay);
+
+  if (dest.length >= maxG) {
+    alert(`No se puede mover: el día ${toDay} está completo (máx ${maxG}).`);
+    // Revertir: devolver al origen
+    if (!guardias[fromKey]) guardias[fromKey] = {};
+    if (!guardias[fromKey][String(fromDay)]) guardias[fromKey][String(fromDay)] = [];
+    guardias[fromKey][String(fromDay)].splice(fromIdx, 0, { name, level });
+    saveGuardias(guardias);
+    return;
+  }
+  if (dest.some(g => g.name === name)) {
+    alert(`${name} ya tiene guardia el día ${toDay}.`);
+    if (!guardias[fromKey]) guardias[fromKey] = {};
+    if (!guardias[fromKey][String(fromDay)]) guardias[fromKey][String(fromDay)] = [];
+    guardias[fromKey][String(fromDay)].splice(fromIdx, 0, { name, level });
+    saveGuardias(guardias);
+    return;
+  }
+
+  dest.push({ name, level });
+  saveGuardias(guardias);
+  STATE.drag = null;
+  renderCalendar();
+}
+
+// ============================================================
+// ELIMINAR GUARDIA (botón X)
+// ============================================================
+function deleteGuard(key, day, idx) {
+  const g = loadGuardias();
+  if (!g[key]?.[String(day)]) return;
+  g[key][String(day)].splice(idx, 1);
+  if (!g[key][String(day)].length) delete g[key][String(day)];
+  saveGuardias(g);
+  renderCalendar();
+}
+
+// ============================================================
+// MODAL AÑADIR GUARDIA (doble clic en día)
+// ============================================================
+function openAddModal(day, key, maxG) {
+  const guardias = loadGuardias();
+  const dayGuards = (guardias[key]||{})[String(day)] || [];
+
+  STATE.addModalDay = day;
+  STATE.addModalKey = key;
+
+  const dateStr = new Date(STATE.viewYear, STATE.viewMonth, day)
+    .toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  document.getElementById('add-modal-title').textContent = `Añadir guardia — ${dateStr}`;
+  document.getElementById('add-modal-warning').textContent = '';
+
+  const sel = document.getElementById('add-modal-user');
+  sel.innerHTML = '<option value="">— Selecciona usuario —</option>';
+
+  const users = loadUsers();
+  const inDay = new Set(dayGuards.map(g => g.name));
+  const avail = users.filter(u => !inDay.has(u.name));
+
+  if (dayGuards.length >= maxG) {
+    sel.innerHTML = '<option value="">Día completo (máx ' + maxG + ')</option>';
+    sel.disabled = true;
   } else {
-    dayGuards.forEach((g, idx) => {
-      const item = document.createElement('div');
-      item.className = `modal-guard-item ${isApproved ? 'approved' : 'pending'}`;
-      item.innerHTML = `
-        <span class="modal-guard-name">${g.name}</span>
-        <span class="modal-guard-level">${g.level}</span>
-        ${isAdminOrDev
-          ? `<button class="btn-delete-guard" ondblclick="deleteGuard('${key}',${day},${idx})">✕ Borrar</button>`
-          : ''}
-      `;
-      listEl.appendChild(item);
+    sel.disabled = false;
+    avail.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.name;
+      opt.textContent = `${u.name} (${u.level||'-'}) · ${u.rol}`;
+      opt.dataset.level = u.level || 'R4';
+      sel.appendChild(opt);
     });
   }
 
-  // Sección añadir (admin/dev)
-  const addSection = document.getElementById('modal-add-guard-section');
-  document.getElementById('modal-add-warning').textContent = '';
-
-  if (isAdminOrDev) {
-    addSection.classList.remove('hidden');
-    // Poblar select con usuarios que aún no están en este día
-    const userSelect = document.getElementById('modal-add-user');
-    userSelect.innerHTML = '<option value="">— Selecciona usuario —</option>';
-    const users = loadUsers();
-    const alreadyIn = new Set(dayGuards.map(g => g.name));
-    const available = users.filter(u => !alreadyIn.has(u.name));
-    if (dayGuards.length >= maxG) {
-      userSelect.innerHTML = '<option value="">Día completo</option>';
-      userSelect.disabled = true;
-    } else {
-      userSelect.disabled = false;
-      available.forEach(u => {
-        const opt = document.createElement('option');
-        opt.value = u.name;
-        opt.textContent = `${u.name} (${u.level || '-'}) · ${u.rol}`;
-        opt.dataset.level = u.level || 'R4';
-        userSelect.appendChild(opt);
-      });
-    }
-  } else {
-    addSection.classList.add('hidden');
-  }
-
-  // Hint
-  const hint = document.getElementById('modal-hint');
-  if (isAdminOrDev) {
-    hint.textContent = 'Doble clic en "Borrar" para eliminar. Solo admin puede añadir manualmente.';
-  } else {
-    hint.textContent = isApproved ? 'Mes aprobado — solo lectura.' : '';
-  }
-
-  document.getElementById('day-modal').classList.remove('hidden');
+  document.getElementById('add-modal').classList.remove('hidden');
 }
 
-function closeModal() {
-  document.getElementById('day-modal').classList.add('hidden');
-  STATE.modalDay = null;
-  STATE.modalMonthKey = null;
+function closeAddModal() {
+  document.getElementById('add-modal').classList.add('hidden');
+  STATE.addModalDay = null;
+  STATE.addModalKey = null;
 }
 
-function deleteGuard(key, day, idx) {
-  const guardias = loadGuardias();
-  if (!guardias[key]?.[String(day)]) return;
-  guardias[key][String(day)].splice(idx, 1);
-  if (guardias[key][String(day)].length === 0) delete guardias[key][String(day)];
-  saveGuardias(guardias);
-  closeModal();
-  renderCalendar();
-}
+function confirmAddModal() {
+  const { addModalDay: day, addModalKey: key } = STATE;
+  if (!day || !key) return;
 
-function modalAddGuard() {
-  const { modalDay, modalMonthKey, viewYear, viewMonth } = STATE;
-  if (!modalDay || !modalMonthKey) return;
-
-  const userSelect = document.getElementById('modal-add-user');
-  const selectedName = userSelect.value;
-  const warnEl = document.getElementById('modal-add-warning');
+  const sel = document.getElementById('add-modal-user');
+  const name = sel.value;
+  const warnEl = document.getElementById('add-modal-warning');
   warnEl.textContent = '';
 
-  if (!selectedName) { warnEl.textContent = 'Selecciona un usuario.'; return; }
-
-  const selectedOpt = userSelect.selectedOptions[0];
-  const selectedLevel = selectedOpt?.dataset.level || 'R4';
+  if (!name) { warnEl.textContent = 'Selecciona un usuario.'; return; }
+  const level = sel.selectedOptions[0]?.dataset.level || 'R4';
 
   const guardias = loadGuardias();
-  if (!guardias[modalMonthKey]) guardias[modalMonthKey] = {};
-  const dayKey = String(modalDay);
-  if (!guardias[modalMonthKey][dayKey]) guardias[modalMonthKey][dayKey] = [];
-  const existing = guardias[modalMonthKey][dayKey];
-  const maxG = maxGuardsForDay(viewYear, viewMonth, modalDay);
+  if (!guardias[key]) guardias[key] = {};
+  if (!guardias[key][String(day)]) guardias[key][String(day)] = [];
+  const existing = guardias[key][String(day)];
+  const maxG = maxGuardsForDay(STATE.viewYear, STATE.viewMonth, day);
 
   if (existing.length >= maxG) { warnEl.textContent = 'Día completo.'; return; }
-  if (existing.some(g => g.name === selectedName)) { warnEl.textContent = 'Ese usuario ya tiene guardia este día.'; return; }
+  if (existing.some(g => g.name === name)) { warnEl.textContent = 'Ese usuario ya tiene guardia ese día.'; return; }
 
-  existing.push({ name: selectedName, level: selectedLevel });
+  existing.push({ name, level });
   saveGuardias(guardias);
-
-  // Reabrir modal actualizado
-  const approved = loadApproved();
-  const isApproved = !!approved[modalMonthKey];
-  closeModal();
+  closeAddModal();
   renderCalendar();
-  openDayModal(modalDay, isApproved, modalMonthKey, maxG);
 }
 
 // ============================================================
 // PROPONER GUARDIA
 // ============================================================
 function submitProposal() {
-  const { session, viewYear, viewMonth } = STATE;
+  const { session, viewYear: y, viewMonth: m } = STATE;
   const now = today();
-  const curYear = now.getFullYear(), curMonth = now.getMonth(), curDay = now.getDate();
+  const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate();
+  const s = loadSettings();
 
-  // Verificar permiso de nivel
   if (!canPropose(session.level)) return;
 
-  // Verificar plazo
-  const isNextMonth = (viewYear > curYear) || (viewYear === curYear && viewMonth > curMonth);
-  if (isNextMonth && curDay > 15) {
-    alert('El plazo de propuestas para el mes siguiente ya ha cerrado (día 15 del mes actual).');
+  const isNextMonth = (y > curY) || (y === curY && m > curM);
+  if (isNextMonth && s.deadlineOn && curD > 15) {
+    alert('Plazo cerrado: propuestas del mes siguiente hasta el día 15 del mes actual.');
     return;
   }
 
-  // Nº guardias (1-5)
-  const countRaw = parseInt(document.getElementById('prop-count').value, 10);
-  if (isNaN(countRaw) || countRaw < 1 || countRaw > 5) {
-    document.getElementById('prop-days-warning').textContent = 'El número de guardias debe ser entre 1 y 5.';
+  const count = parseInt(document.getElementById('prop-count').value, 10);
+  if (isNaN(count) || count < 1 || count > 5) {
+    document.getElementById('prop-days-warning').textContent = 'Nº de guardias entre 1 y 5.';
     return;
   }
 
-  const daysRaw = document.getElementById('prop-days').value;
-  if (!daysRaw.trim()) {
-    document.getElementById('prop-days-warning').textContent = 'Introduce los días.';
-    return;
-  }
+  const raw = document.getElementById('prop-days').value;
+  if (!raw.trim()) { document.getElementById('prop-days-warning').textContent = 'Introduce los días.'; return; }
 
-  const { valid, errors } = parseDaysInput(daysRaw, viewYear, viewMonth);
+  const { valid, errors } = parseDaysInput(raw, y, m);
+  if (errors.length) { document.getElementById('prop-days-warning').textContent = errors.join(' | '); return; }
+  if (!valid.length) { document.getElementById('prop-days-warning').textContent = 'Sin días válidos.'; return; }
 
-  if (errors.length > 0) {
-    document.getElementById('prop-days-warning').textContent = errors.join(' | ');
-    return;
-  }
-
-  if (valid.length === 0) {
-    document.getElementById('prop-days-warning').textContent = 'No hay días válidos en el rango del mes.';
-    return;
-  }
-
-  // Ajustar al número solicitado (tomar los primeros N válidos)
-  const daysToAdd = valid.slice(0, countRaw);
-
+  const daysToAdd = valid.slice(0, count);
   const guardias = loadGuardias();
-  const key = monthKey(viewYear, viewMonth);
+  const key = monthKey(y, m);
   if (!guardias[key]) guardias[key] = {};
 
-  const added = [];
-  const skipped = [];
+  const added = [], skipped = [];
 
   for (const day of daysToAdd) {
-    const dayKey = String(day);
-    if (!guardias[key][dayKey]) guardias[key][dayKey] = [];
-    const existing = guardias[key][dayKey];
-    const maxG = maxGuardsForDay(viewYear, viewMonth, day);
+    if (!guardias[key][String(day)]) guardias[key][String(day)] = [];
+    const existing = guardias[key][String(day)];
+    const maxG = maxGuardsForDay(y, m, day);
 
-    if (existing.length >= maxG) { skipped.push(`Día ${day}: lleno`); continue; }
+    if (existing.length >= maxG) { skipped.push(`Día ${day}: completo`); continue; }
     if (existing.some(g => g.name === session.name)) { skipped.push(`Día ${day}: ya apuntado`); continue; }
 
-    // Comprobar mezcla de niveles cuando el día se llena a 2
     const newEntry = { name: session.name, level: session.level };
-    const simulated = [...existing, newEntry];
-    if (maxG === 2 && simulated.length === 2 && !hasRequiredLevelMix(simulated)) {
-      skipped.push(`Día ${day}: combinación de niveles inválida (necesita R3/R4 + R1/R2)`);
-      continue;
+    const sim = [...existing, newEntry];
+    if (s.levelMix && maxG <= 3 && sim.length === maxG && !hasRequiredLevelMix(sim)) {
+      skipped.push(`Día ${day}: mezcla de niveles inválida`); continue;
     }
 
     existing.push(newEntry);
@@ -894,11 +831,11 @@ function submitProposal() {
   renderCalendar();
 
   let msg = '';
-  if (added.length > 0) msg += `✅ Guardias añadidas en días: ${added.join(', ')}.`;
-  if (skipped.length > 0) msg += `\n⚠️ Omitidos: ${skipped.join(' | ')}`;
-  if (!msg) msg = 'No se pudo añadir ninguna guardia.';
-
+  if (added.length)   msg += `✅ Añadidas: días ${added.join(', ')}.`;
+  if (skipped.length) msg += `\n⚠️ Omitidos: ${skipped.join(' | ')}`;
+  if (!msg) msg = 'No se añadió ninguna guardia.';
   alert(msg);
+
   document.getElementById('prop-days').value = '';
   document.getElementById('prop-count').value = '';
   document.getElementById('prop-days-warning').textContent = '';
@@ -913,33 +850,31 @@ function approveMonth() {
   approved[key] = true;
   saveApproved(approved);
 
-  // Resetear lista de usuarios al aprobar
-  // (preservar solo admins para que puedan seguir entrando)
-  // Según spec: resetear la lista al aprobar el mes
-  // Interpretación: limpiar usuarios normales, mantener admins
+  // Resetear lista de usuarios (mantener admins)
   let users = loadUsers();
-  users = users.filter(u => u.rol === 'admin' || u.rol === 'dev');
+  users = users.filter(u => u.rol === 'admin');
   saveUsers(users);
 
   renderCalendar();
   renderUsersList();
+  if (STATE.session.rol === 'dev') renderDevSwitchList();
   document.getElementById('admin-status').textContent = '✅ Mes aprobado. Usuarios reseteados.';
 }
 
 function resetMonth() {
   const key = monthKey(STATE.viewYear, STATE.viewMonth);
-  const mLabel = new Date(STATE.viewYear, STATE.viewMonth, 1)
+  const label = new Date(STATE.viewYear, STATE.viewMonth, 1)
     .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-  if (!confirm(`¿Resetear todas las guardias de ${mLabel}?\nSe realizará un backup automático antes.`)) return;
+  if (!confirm(`¿Resetear guardias de ${label}?\nSe hará backup automático.`)) return;
 
-  const guardias = loadGuardias();
-  saveBackup(JSON.parse(JSON.stringify(guardias)));
-  delete guardias[key];
-  saveGuardias(guardias);
+  const g = loadGuardias();
+  saveBackup(JSON.parse(JSON.stringify(g)));
+  delete g[key];
+  saveGuardias(g);
 
-  const approved = loadApproved();
-  delete approved[key];
-  saveApproved(approved);
+  const a = loadApproved();
+  delete a[key];
+  saveApproved(a);
 
   renderCalendar();
   document.getElementById('admin-status').textContent = '🗑️ Mes reseteado. Backup guardado.';
@@ -947,42 +882,37 @@ function resetMonth() {
 
 function restoreBackup() {
   const backup = loadBackup();
-  if (!backup) { alert('No hay ningún backup disponible.'); return; }
-  if (!confirm('¿Restaurar el backup? Se sobreescribirán las guardias actuales.')) return;
+  if (!backup) { alert('No hay backup disponible.'); return; }
+  if (!confirm('¿Restaurar el mes borrado? Se sobreescribirán las guardias actuales.')) return;
   saveGuardias(backup);
   renderCalendar();
-  document.getElementById('admin-status').textContent = '♻️ Backup restaurado correctamente.';
+  document.getElementById('admin-status').textContent = '♻️ Mes restaurado.';
 }
 
 // ============================================================
-// DEV: CREAR USUARIO (desde sidebar en app)
+// DEV: CREAR USUARIO (en app)
 // ============================================================
 function devCreateUser() {
-  const name = document.getElementById('dev-new-name').value.trim();
+  const name  = document.getElementById('dev-new-name').value.trim();
   const level = document.getElementById('dev-new-level').value;
-  const rol = document.getElementById('dev-new-rol').value;
+  const rol   = document.getElementById('dev-new-rol').value;
   if (!name) { alert('Introduce un nombre.'); return; }
-
   let users = loadUsers();
-  if (users.some(u => u.name === name)) { alert('Ya existe un usuario con ese nombre.'); return; }
-
+  if (users.some(u => u.name === name)) { alert('Nombre ya existente.'); return; }
   const u = { name, level, rol };
   if (rol === 'admin') u.pass = 'admin123';
   users.push(u);
   saveUsers(users);
-
   document.getElementById('dev-new-name').value = '';
   renderDevSwitchList();
   renderUsersList();
-  alert(`Usuario "${name}" (${level} · ${rol}) creado.${rol === 'admin' ? ' Contraseña: admin123' : ''}`);
+  alert(`Usuario "${name}" (${level} · ${rol}) creado.${rol==='admin'?' Contraseña: admin123':''}`);
 }
 
 // ============================================================
-// PDF EXPORT
+// UTILS
 // ============================================================
-function exportPDF() {
-  window.print();
-}
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ============================================================
 // INIT

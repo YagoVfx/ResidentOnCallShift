@@ -1,37 +1,32 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GuardiasMIR — Gestión de Guardias</title>
+  <title>GuardiasMIR</title>
   <link rel="stylesheet" href="styles.css"/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
 </head>
 <body>
 
-<!-- ===================== LOGIN SCREEN ===================== -->
+<!-- ==================== LOGIN ==================== -->
 <div id="login-screen" class="login-screen">
   <div class="login-card">
     <div class="login-logo">
       <span class="logo-icon">🏥</span>
       <h1 class="logo-title">GuardiasMIR</h1>
-      <p class="logo-sub">Sistema de gestión de guardias</p>
+      <p class="logo-sub">Identifícate para continuar</p>
     </div>
 
-    <div class="login-tabs" id="login-tabs-bar">
-      <button class="tab-btn active" data-tab="user">Usuario</button>
-      <button class="tab-btn" data-tab="admin">Administrador</button>
-    </div>
-
-    <!-- Tab Usuario -->
-    <div id="tab-user" class="tab-content active">
+    <!-- Pantalla única: solo nombre + nivel -->
+    <div id="login-main" class="login-main">
       <div class="form-group">
-        <label>Nombre completo</label>
-        <input type="text" id="login-user-name" placeholder="Tu nombre completo" autocomplete="off"/>
+        <label>Tu nombre completo</label>
+        <input type="text" id="login-name" placeholder="Nombre y apellidos" autocomplete="off"/>
       </div>
       <div class="form-group">
         <label>Nivel MIR</label>
-        <select id="login-user-level">
+        <select id="login-level">
           <option value="">Selecciona nivel</option>
           <option value="R1">R1</option>
           <option value="R2">R2</option>
@@ -39,42 +34,38 @@
           <option value="R4">R4</option>
         </select>
       </div>
-      <button class="btn-primary" id="btn-login-user">Entrar como Usuario</button>
+      <button class="btn-primary" id="btn-login-user">Entrar</button>
+      <p class="login-hint">Si eres administrador, introduce tu nombre y contraseña aparecerá automáticamente.</p>
+      <!-- Campo pass oculto que aparece si el nombre coincide con un admin -->
+      <div id="login-admin-pass-group" class="form-group hidden" style="margin-top:10px">
+        <label>Contraseña de administrador</label>
+        <input type="password" id="login-pass" placeholder="••••••••" autocomplete="off"/>
+      </div>
     </div>
 
-    <!-- Tab Administrador -->
-    <div id="tab-admin" class="tab-content">
-      <div class="form-group">
-        <label>Nombre de administrador</label>
-        <input type="text" id="login-admin-name" placeholder="Nombre del admin" autocomplete="off"/>
-      </div>
-      <div class="form-group">
-        <label>Contraseña</label>
-        <input type="password" id="login-admin-pass" placeholder="••••••••" autocomplete="off"/>
-      </div>
-      <button class="btn-primary" id="btn-login-admin">Entrar como Admin</button>
-    </div>
-
-    <!-- Tab DEV (oculto, triple clic esquina inferior derecha) -->
-    <div id="tab-dev" class="tab-content tab-dev-hidden">
+    <!-- DEV panel (triple clic esquina) -->
+    <div id="tab-dev" class="tab-dev-hidden">
       <div class="dev-panel-header">
         <span class="dev-badge-label">⚡ DEV MODE</span>
-        <span class="dev-panel-hint">Solo visible en entorno de pruebas</span>
+        <span class="dev-panel-hint">Solo entorno de pruebas</span>
       </div>
-
       <button class="btn-dev-enter" id="btn-login-dev">Entrar como DEV</button>
-
+      <div class="dev-divider">Simular día del mes</div>
+      <div class="dev-date-row">
+        <label class="dev-small-label">Día simulado</label>
+        <input type="number" id="dev-fake-day" min="1" max="31" placeholder="Día (1-31)" class="dev-input" style="width:100px"/>
+        <button class="btn-dev-apply-date" id="btn-dev-apply-date">Aplicar</button>
+        <button class="btn-dev-reset-date" id="btn-dev-reset-date">Reset</button>
+      </div>
+      <div id="dev-fake-day-status" class="dev-fake-status"></div>
       <div class="dev-divider">Cambiar a usuario existente</div>
       <div id="dev-login-users-list" class="dev-login-users-list"></div>
-
       <div class="dev-divider">Crear usuario rápido</div>
       <div class="dev-quick-create">
         <input type="text" id="dev-quick-name" placeholder="Nombre" class="dev-input"/>
         <select id="dev-quick-level" class="dev-input">
-          <option value="R1">R1</option>
-          <option value="R2">R2</option>
-          <option value="R3">R3</option>
-          <option value="R4">R4</option>
+          <option value="R1">R1</option><option value="R2">R2</option>
+          <option value="R3">R3</option><option value="R4">R4</option>
         </select>
         <select id="dev-quick-rol" class="dev-input">
           <option value="user">Usuario</option>
@@ -84,14 +75,12 @@
       </div>
     </div>
 
-    <!-- Hotspot DEV invisible (esquina inferior derecha) -->
     <div id="dev-trigger" class="dev-trigger"></div>
-
     <div id="login-error" class="login-error"></div>
   </div>
 </div>
 
-<!-- ===================== APP ===================== -->
+<!-- ==================== APP ==================== -->
 <div id="app" class="app hidden">
 
   <header class="topbar">
@@ -116,8 +105,11 @@
         <div>Lun</div><div>Mar</div><div>Mié</div>
         <div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
       </div>
+      <!-- Hint drag/drop solo admin/dev -->
+      <div id="cal-hint" class="cal-hint hidden">
+        💡 Arrastra un nombre a otro día para moverlo. Doble clic en una casilla para añadir guardia.
+      </div>
       <div class="calendar-grid" id="calendar-grid"></div>
-
       <div id="pdf-section" class="pdf-section hidden">
         <button class="btn-pdf" id="btn-export-pdf">📄 Exportar PDF del mes aprobado</button>
       </div>
@@ -129,14 +121,10 @@
       <!-- Formulario propuesta -->
       <div class="sidebar-card" id="form-card">
         <h3 class="sidebar-title">📝 Proponer guardia</h3>
-
-        <div id="form-deadline-warning" class="alert-box alert-orange hidden">
-          ⚠️ Fuera de plazo. Las propuestas del mes siguiente solo se aceptan del día 1 al 15 del mes actual.
-        </div>
+        <div id="form-deadline-warning" class="alert-box alert-orange hidden"></div>
         <div id="form-current-month-info" class="alert-box alert-blue hidden">
-          📅 Estás viendo el mes actual. Propón guardias directamente.
+          📅 Viendo mes actual — propón tus días.
         </div>
-
         <div id="form-body">
           <div class="form-group">
             <label>Nombre</label>
@@ -147,11 +135,11 @@
             <input type="text" id="prop-level" readonly/>
           </div>
           <div class="form-group">
-            <label>Nº de guardias <span class="label-hint">(máx 5)</span></label>
+            <label>Nº de guardias <span class="label-hint">(1–5)</span></label>
             <input type="number" id="prop-count" min="1" max="5" placeholder="Entre 1 y 5"/>
           </div>
           <div class="form-group">
-            <label>Días <span class="label-hint">(solo números, separados por comas)</span></label>
+            <label>Días <span class="label-hint">(números separados por comas)</span></label>
             <input type="text" id="prop-days" placeholder="Ej: 3, 10, 17" autocomplete="off" inputmode="numeric"/>
             <div id="prop-days-warning" class="prop-warning"></div>
           </div>
@@ -159,28 +147,109 @@
         </div>
       </div>
 
-      <!-- Admin: Acciones -->
+      <!-- Admin -->
       <div class="sidebar-card hidden" id="admin-card">
         <h3 class="sidebar-title">⚙️ Administración</h3>
         <div class="admin-actions">
           <button class="btn-admin" id="btn-approve">✅ Aprobar mes visible</button>
           <button class="btn-admin btn-warn" id="btn-reset">🗑️ Resetear mes visible</button>
-          <button class="btn-admin" id="btn-restore">♻️ Restaurar backup</button>
+          <button class="btn-admin" id="btn-restore">♻️ Restaurar mes borrado</button>
         </div>
         <div id="admin-status" class="admin-status"></div>
       </div>
 
-      <!-- DEV: Panel gestión -->
+      <!-- DEV -->
       <div class="sidebar-card hidden" id="dev-card">
-        <h3 class="sidebar-title">⚡ DEV — Gestión</h3>
+        <h3 class="sidebar-title">⚡ DEV — Restricciones</h3>
 
-        <div class="dev-toggle-row">
-          <span class="dev-toggle-label">Permitir propuestas R1/R2</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-r1r2"/>
-            <span class="toggle-slider"></span>
-          </label>
+        <div class="dev-toggles-list">
+
+          <div class="dev-toggle-row">
+            <div class="dev-toggle-info">
+              <span class="dev-toggle-label">Permitir R1/R2 proponer</span>
+              <span class="dev-toggle-hint">Por defecto bloqueado</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-r1r2"/>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-toggle-row">
+            <div class="dev-toggle-info">
+              <span class="dev-toggle-label">Requerir mezcla R3/R4 + R1/R2</span>
+              <span class="dev-toggle-hint">Obliga combinación de niveles</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-level-mix" checked/>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-toggle-row">
+            <div class="dev-toggle-info">
+              <span class="dev-toggle-label">Límite 2 personas entre semana</span>
+              <span class="dev-toggle-hint">Mar–Vie máx 2</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-limit-week" checked/>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-toggle-row">
+            <div class="dev-toggle-info">
+              <span class="dev-toggle-label">Límite 3 en Lunes</span>
+              <span class="dev-toggle-hint">Lunes máx 3</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-limit-mon" checked/>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-toggle-row">
+            <div class="dev-toggle-info">
+              <span class="dev-toggle-label">Límite 3 en Sábados</span>
+              <span class="dev-toggle-hint">Sáb máx 3</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-limit-sat" checked/>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-toggle-row">
+            <div class="dev-toggle-info">
+              <span class="dev-toggle-label">Límite 3 en Domingos</span>
+              <span class="dev-toggle-hint">Dom máx 3</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-limit-sun" checked/>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-toggle-row">
+            <div class="dev-toggle-info">
+              <span class="dev-toggle-label">Plazo propuestas mes siguiente</span>
+              <span class="dev-toggle-hint">Bloquear tras día 15</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="toggle-deadline" checked/>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
         </div>
+
+        <div class="dev-divider" style="margin:14px 0 10px">Simular día actual</div>
+        <div class="dev-date-row-app">
+          <input type="number" id="dev-fake-day-app" min="1" max="31" placeholder="Día (1-31)" class="dev-input"/>
+          <button class="btn-dev-apply-date" id="btn-dev-apply-date-app">Aplicar</button>
+          <button class="btn-dev-reset-date" id="btn-dev-reset-date-app">Reset</button>
+        </div>
+        <div id="dev-fake-day-status-app" class="dev-fake-status"></div>
 
         <div class="dev-divider" style="margin:14px 0 10px">Crear usuario</div>
         <div class="form-group">
@@ -190,10 +259,8 @@
         <div class="form-group">
           <label>Nivel</label>
           <select id="dev-new-level">
-            <option value="R1">R1</option>
-            <option value="R2">R2</option>
-            <option value="R3">R3</option>
-            <option value="R4">R4</option>
+            <option value="R1">R1</option><option value="R2">R2</option>
+            <option value="R3">R3</option><option value="R4">R4</option>
           </select>
         </div>
         <div class="form-group">
@@ -209,7 +276,7 @@
         <div id="dev-user-switch-list" class="dev-switch-list"></div>
       </div>
 
-      <!-- Lista usuarios (admin + dev) -->
+      <!-- Usuarios (admin+dev) -->
       <div class="sidebar-card hidden" id="users-card">
         <div class="users-card-header">
           <h3 class="sidebar-title" style="margin-bottom:0">👥 Usuarios registrados</h3>
@@ -222,31 +289,26 @@
   </div>
 </div>
 
-<!-- ===================== MODAL DÍA ===================== -->
-<div id="day-modal" class="modal-overlay hidden">
-  <div class="modal-card">
+<!-- ==================== MODAL AÑADIR GUARDIA (doble clic) ==================== -->
+<div id="add-modal" class="modal-overlay hidden">
+  <div class="modal-card" style="max-width:360px">
     <div class="modal-header">
-      <h3 id="modal-day-title">Guardias del día</h3>
-      <button class="modal-close" id="modal-close">✕</button>
+      <h3 id="add-modal-title">Añadir guardia</h3>
+      <button class="modal-close" id="add-modal-close">✕</button>
     </div>
-
-    <div id="modal-guards-list" class="modal-guards-list"></div>
-
-    <!-- Añadir guardia manualmente (solo admin/dev) -->
-    <div id="modal-add-guard-section" class="modal-add-section hidden">
-      <div class="modal-add-title">➕ Añadir guardia manualmente</div>
-      <div class="modal-add-row">
-        <select id="modal-add-user" class="modal-select">
-          <option value="">— Selecciona usuario —</option>
-        </select>
-        <button class="btn-modal-add" id="btn-modal-add-guard">Añadir</button>
-      </div>
-      <div id="modal-add-warning" class="prop-warning" style="margin-top:6px"></div>
+    <div class="form-group" style="margin-top:4px">
+      <label>Usuario</label>
+      <select id="add-modal-user" class="modal-select">
+        <option value="">— Selecciona —</option>
+      </select>
     </div>
-
-    <p id="modal-hint" class="modal-hint"></p>
+    <div id="add-modal-warning" class="prop-warning" style="margin-bottom:8px"></div>
+    <button class="btn-primary" id="btn-add-modal-confirm">Añadir guardia</button>
   </div>
 </div>
+
+<!-- ==================== DRAG GHOST ==================== -->
+<div id="drag-ghost" class="drag-ghost hidden"></div>
 
 <script src="app.js"></script>
 </body>
