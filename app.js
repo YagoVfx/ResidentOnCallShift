@@ -30,57 +30,86 @@ const SHOWN_WELCOME   = 'mir_shown_welcome'; // Set de nombres que ya vieron el 
 // ██████╔╝██████╔╝    ███████╗██║  ██║   ██║   ███████╗██║  ██║
 // ╚═════╝ ╚═════╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
 //
-// CAPA DE DATOS — Sustituye estas funciones por
-// llamadas a Firebase Firestore para persistencia
-// entre dispositivos. El resto del código NO cambia.
+// ============================================================
+// CAPA DE DATOS — Firebase Firestore
 // ============================================================
 
-function loadGuardias() {
-  try { return JSON.parse(localStorage.getItem('guardias')) || {}; }
-  catch { return {}; }
+// Importar Firebase (añadir al <head> del index.html también)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyAMo1I-x4TV2yb_snMAjvLw8plReHNjzoY",
+    authDomain: "residentoncallshift.firebaseapp.com",
+    projectId: "residentoncallshift",
+    storageBucket: "residentoncallshift.firebasestorage.app",
+    messagingSenderId: "430597501785",
+    appId: "1:430597501785:web:cf0713d0954a96fade9248",
+    measurementId: "G-849RRXW4EB"
+  };
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+// Helper genérico
+async function dbGet(docName) {
+  try {
+    const snap = await getDoc(doc(db, 'mirapp', docName));
+    return snap.exists() ? snap.data().value : null;
+  } catch(e) { console.error('dbGet', docName, e); return null; }
 }
-function saveGuardias(d) {
-  localStorage.setItem('guardias', JSON.stringify(d));
-  // FIREBASE: await setDoc(doc(db,'guardias','data'), d);
+async function dbSet(docName, value) {
+  try {
+    await setDoc(doc(db, 'mirapp', docName), { value });
+  } catch(e) { console.error('dbSet', docName, e); }
 }
 
-function loadBackup() {
-  try { return JSON.parse(localStorage.getItem('guardias_backup')) || null; }
-  catch { return null; }
+// --- Guardias ---
+async function loadGuardias() {
+  const d = await dbGet('guardias');
+  return d || {};
 }
-function saveBackup(d) {
-  localStorage.setItem('guardias_backup', JSON.stringify(d));
-  // FIREBASE: await setDoc(doc(db,'backups','latest'), d);
-}
-
-function loadUsers() {
-  try { return JSON.parse(localStorage.getItem('mir_users')) || []; }
-  catch { return []; }
-}
-function saveUsers(u) {
-  localStorage.setItem('mir_users', JSON.stringify(u));
-  // FIREBASE: await setDoc(doc(db,'users','list'), { users: u });
+async function saveGuardias(data) {
+  await dbSet('guardias', data);
 }
 
-function loadApproved() {
-  try { return JSON.parse(localStorage.getItem('mir_approved')) || {}; }
-  catch { return {}; }
+// --- Backup ---
+async function loadBackup() {
+  return await dbGet('guardias_backup');
 }
-function saveApproved(d) {
-  localStorage.setItem('mir_approved', JSON.stringify(d));
-  // FIREBASE: await setDoc(doc(db,'approved','data'), d);
+async function saveBackup(data) {
+  await dbSet('guardias_backup', data);
 }
 
+// --- Usuarios ---
+async function loadUsers() {
+  const d = await dbGet('users');
+  return d || [];
+}
+async function saveUsers(users) {
+  await dbSet('users', users);
+}
+
+// --- Aprobados ---
+async function loadApproved() {
+  const d = await dbGet('approved');
+  return d || {};
+}
+async function saveApproved(data) {
+  await dbSet('approved', data);
+}
+
+// --- Settings ---
 function loadSettings() {
+  // Settings se mantienen en localStorage (son por dispositivo/DEV)
   try { return Object.assign({}, defaultSettings(), JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); }
   catch { return defaultSettings(); }
 }
 function saveSettings(s) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
-  // FIREBASE: await setDoc(doc(db,'settings','data'), s);
 }
 
-// Registro de quién ya vio el aviso de bienvenida
+// --- Welcome visto ---
 function hasSeenWelcome(name) {
   try { const s = JSON.parse(localStorage.getItem(SHOWN_WELCOME)) || []; return s.includes(name); }
   catch { return false; }
@@ -115,7 +144,7 @@ function defaultSettings() {
 // ADMIN POR DEFECTO
 // ============================================================
 function ensureDefaultAdmin() {
-  let users = loadUsers();
+  let users = await loadUsers();
   if (!users.some(u => u.rol === 'admin')) {
     users.push({ name: 'Admin', level: 'R4', rol: 'admin', pass: 'admin123' });
     saveUsers(users);
@@ -141,7 +170,7 @@ function dayOfWeek(y, m, d) { return new Date(y, m, d).getDay(); } // 0=Dom,1=Lu
 // REGLAS DE CAPACIDAD
 // ============================================================
 function maxGuardsForDay(y, m, d) {
-  const s = loadSettings();
+  const s = await loadSettings();
   const wd = dayOfWeek(y, m, d);
   if (wd === 1 && s.limitMon)  return 3;
   if (wd === 6 && s.limitSat)  return 3;
@@ -245,7 +274,7 @@ function setupLogin() {
   // Detectar admin al escribir nombre
   nameEl.addEventListener('input', () => {
     const name = nameEl.value.trim();
-    const isAdmin = loadUsers().some(u => u.name === name && u.rol === 'admin');
+    const isAdmin = await loadUsers().some(u => u.name === name && u.rol === 'admin');
     passGrp.classList.toggle('hidden', !isAdmin);
     levelGrp.classList.toggle('hidden', isAdmin);
   });
@@ -279,7 +308,7 @@ function doLogin() {
 
   if (!name) { showLoginError('Introduce tu nombre.'); return; }
 
-  const users = loadUsers();
+  const users = await loadUsers();
   const admin = users.find(u => u.name === name && u.rol === 'admin');
 
   if (admin) {
@@ -301,7 +330,7 @@ function devQuickCreate() {
   const level = document.getElementById('dev-quick-level').value;
   const rol   = document.getElementById('dev-quick-rol').value;
   if (!name) { showLoginError('Introduce un nombre.'); return; }
-  let users = loadUsers();
+  let users = await loadUsers();
   if (users.some(u => u.name === name)) { showLoginError('Nombre ya existente.'); return; }
   const u = { name, level, rol };
   if (rol === 'admin') u.pass = 'admin123';
@@ -312,7 +341,7 @@ function devQuickCreate() {
 }
 
 function renderDevLoginList() {
-  const users = loadUsers();
+  const users = await loadUsers();
   const el = document.getElementById('dev-login-users-list');
   if (!users.length) { el.innerHTML = '<p style="color:#444;font-size:11px;text-align:center">Sin usuarios</p>'; return; }
   el.innerHTML = users.map((u, i) => `
@@ -325,9 +354,9 @@ function renderDevLoginList() {
       </div>
     </div>`).join('');
 }
-function devLoginAs(i) { const u = loadUsers()[i]; if (u) startSession({ name: u.name, level: u.level||'R4', rol: u.rol }); }
+function devLoginAs(i) { const u = await loadUsers()[i]; if (u) startSession({ name: u.name, level: u.level||'R4', rol: u.rol }); }
 function devDelFromLogin(i) {
-  let users = loadUsers(); const x = users[i]; if (!x) return;
+  let users = await loadUsers(); const x = users[i]; if (!x) return;
   if (x.rol==='admin' && users.filter(a=>a.rol==='admin').length<=1) { showLoginError('Mínimo 1 admin.'); return; }
   users.splice(i,1); saveUsers(users); renderDevLoginList();
 }
@@ -418,7 +447,7 @@ function renderSidebar() {
 }
 
 function syncDevToggles() {
-  const s = loadSettings();
+  const s = await loadSettings();
   document.getElementById('toggle-r1r2').checked       = s.allowR1R2;
   document.getElementById('toggle-level-mix').checked  = s.levelMix;
   document.getElementById('toggle-limit-week').checked = s.limitWeek;
@@ -432,7 +461,7 @@ function updateFormState() {
   const { session, viewYear, viewMonth } = STATE;
   const now = today();
   const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate();
-  const s = loadSettings();
+  const s = await loadSettings();
   const isNextMonth    = (viewYear > curY) || (viewYear === curY && viewMonth > curM);
   const isCurrentMonth = viewYear === curY && viewMonth === curM;
 
@@ -460,7 +489,7 @@ function updateFormState() {
 }
 
 function renderUsersList() {
-  const users = loadUsers();
+  const users = await loadUsers();
   document.getElementById('users-count-badge').textContent = users.length;
   const el = document.getElementById('users-list');
   el.innerHTML = users.length
@@ -473,7 +502,7 @@ function renderUsersList() {
 }
 
 function renderDevSwitchList() {
-  const users = loadUsers();
+  const users = await loadUsers();
   const el = document.getElementById('dev-user-switch-list');
   el.innerHTML = users.length
     ? users.map((u, i) => `
@@ -485,12 +514,12 @@ function renderDevSwitchList() {
     : '<p style="color:#444;font-size:11px">Sin usuarios</p>';
 }
 function devSwitchInApp(i) {
-  const u = loadUsers()[i]; if (!u) return;
+  const u = await loadUsers()[i]; if (!u) return;
   STATE.session = { name: u.name, level: u.level||'R4', rol: u.rol };
   renderTopbar(); renderSidebar(); renderCalendar();
 }
 function devDelInApp(i) {
-  let users = loadUsers(); const x = users[i]; if (!x) return;
+  let users = await loadUsers(); const x = users[i]; if (!x) return;
   if (x.rol==='admin' && users.filter(a=>a.rol==='admin').length<=1) { alert('Mínimo 1 admin.'); return; }
   users.splice(i,1); saveUsers(users); renderDevSwitchList(); renderUsersList();
 }
@@ -541,7 +570,7 @@ function setupNavigation() {
   };
   Object.entries(toggleMap).forEach(([id, key]) => {
     document.getElementById(id).addEventListener('change', e => {
-      const s = loadSettings(); s[key] = e.target.checked; saveSettings(s);
+      const s = await loadSettings(); s[key] = e.target.checked; saveSettings(s);
       updateFormState(); renderCalendar();
     });
   });
@@ -592,7 +621,7 @@ function adminAddUser() {
   warnEl.textContent = '';
 
   if (!name) { warnEl.textContent = 'Introduce un nombre.'; return; }
-  let users = loadUsers();
+  let users = await loadUsers();
   if (users.some(u => u.name === name)) { warnEl.textContent = 'Ese nombre ya está registrado.'; return; }
 
   users.push({ name, level, rol: 'user' });
@@ -621,10 +650,10 @@ function renderCalendar() {
   let ny=curY, nm=curM+1; if(nm>11){nm=0;ny++;}
   document.getElementById('btn-next').disabled = (y===ny && m===nm);
 
-  const guardias  = loadGuardias();
+  const guardias  = await loadGuardias();
   const key       = monthKey(y, m);
   const monthData = guardias[key] || {};
-  const approved  = loadApproved();
+  const approved  = await loadApproved();
   const isApproved = !!approved[key];
   const rol       = session.rol;
   const isAdm     = rol === 'admin' || rol === 'dev';
@@ -772,7 +801,7 @@ function renderCalendar() {
 }
 
 function cleanOldMonths(curY, curM) {
-  const g = loadGuardias(), a = loadApproved(); let ch = false;
+  const g = await loadGuardias(), a = await loadApproved(); let ch = false;
   [...Object.keys(g), ...Object.keys(a)].forEach(k => {
     const [y, mo] = k.split('-').map(Number);
     if (y < curY || (y===curY && mo-1 < curM)) { delete g[k]; delete a[k]; ch = true; }
@@ -788,7 +817,7 @@ function dropGuard(toDay, toKey) {
   const { fromKey, fromDay, fromIdx, name, level } = drag;
   if (fromKey===toKey && fromDay===toDay) return;
 
-  const guardias = loadGuardias();
+  const guardias = await loadGuardias();
   const src = (guardias[fromKey]||{})[String(fromDay)];
   if (!src) return;
 
@@ -820,7 +849,7 @@ function dropGuard(toDay, toKey) {
 // ELIMINAR GUARDIA
 // ============================================================
 function deleteGuard(key, day, idx) {
-  const g = loadGuardias();
+  const g = await loadGuardias();
   if (!g[key]?.[String(day)]) return;
   g[key][String(day)].splice(idx, 1);
   if (!g[key][String(day)].length) delete g[key][String(day)];
@@ -832,7 +861,7 @@ function deleteGuard(key, day, idx) {
 // MODAL AÑADIR GUARDIA (clic en + de admin/dev)
 // ============================================================
 function openAddModal(day, key, maxG) {
-  const guardias  = loadGuardias();
+  const guardias  = await loadGuardias();
   const dayGuards = (guardias[key]||{})[String(day)] || [];
 
   STATE.addModalDay = day;
@@ -845,7 +874,7 @@ function openAddModal(day, key, maxG) {
 
   const sel   = document.getElementById('add-modal-user');
   sel.innerHTML = '<option value="">— Selecciona usuario —</option>';
-  const users = loadUsers();
+  const users = await loadUsers();
   const inDay = new Set(dayGuards.map(g => g.name));
 
   if (dayGuards.length >= maxG) {
@@ -882,7 +911,7 @@ function confirmAddModal() {
   if (!name) { warnEl.textContent = 'Selecciona un usuario.'; return; }
   const level = sel.selectedOptions[0]?.dataset.level || 'R4';
 
-  const guardias = loadGuardias();
+  const guardias = await loadGuardias();
   if (!guardias[key]) guardias[key] = {};
   if (!guardias[key][String(day)]) guardias[key][String(day)] = [];
   const existing = guardias[key][String(day)];
@@ -904,7 +933,7 @@ function submitProposal() {
   const { session, viewYear: y, viewMonth: m } = STATE;
   const now = today();
   const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate();
-  const s = loadSettings();
+  const s = await loadSettings();
 
   if (!canPropose(session.level)) return;
 
@@ -928,7 +957,7 @@ function submitProposal() {
   if (!valid.length) { document.getElementById('prop-days-warning').textContent = 'Sin días válidos.'; return; }
 
   const daysToAdd = valid.slice(0, count);
-  const guardias  = loadGuardias();
+  const guardias  = await loadGuardias();
   const key       = monthKey(y, m);
   if (!guardias[key]) guardias[key] = {};
 
@@ -971,12 +1000,12 @@ function submitProposal() {
 // ============================================================
 function approveMonth() {
   const key = monthKey(STATE.viewYear, STATE.viewMonth);
-  const approved = loadApproved();
+  const approved = await loadApproved();
   approved[key] = true;
   saveApproved(approved);
 
   // Resetear usuarios (mantener solo admins)
-  let users = loadUsers();
+  let users = await loadUsers();
   users = users.filter(u => u.rol === 'admin');
   saveUsers(users);
 
@@ -992,12 +1021,12 @@ function resetMonth() {
     .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
   if (!confirm(`¿Resetear guardias de ${label}?\nSe hará un backup automático.`)) return;
 
-  const g = loadGuardias();
+  const g = await loadGuardias();
   saveBackup(JSON.parse(JSON.stringify(g)));
   delete g[key];
   saveGuardias(g);
 
-  const a = loadApproved();
+  const a = await loadApproved();
   delete a[key];
   saveApproved(a);
 
@@ -1006,7 +1035,7 @@ function resetMonth() {
 }
 
 function restoreBackup() {
-  const backup = loadBackup();
+  const backup = await loadBackup();
   if (!backup) { alert('No hay backup disponible.'); return; }
   if (!confirm('¿Restaurar el mes borrado? Se sobreescribirán las guardias actuales.')) return;
   saveGuardias(backup);
@@ -1022,7 +1051,7 @@ function devCreateUser() {
   const level = document.getElementById('dev-new-level').value;
   const rol   = document.getElementById('dev-new-rol').value;
   if (!name) { alert('Introduce un nombre.'); return; }
-  let users = loadUsers();
+  let users = await loadUsers();
   if (users.some(u => u.name === name)) { alert('Nombre ya existente.'); return; }
   const u = { name, level, rol };
   if (rol === 'admin') u.pass = 'admin123';
