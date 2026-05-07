@@ -52,24 +52,36 @@
         </select>
       </div>
       <div class="form-group hidden" id="login-admin-pass-group">
-        <label>Contraseña de administrador</label>
+        <label>Contraseña / PIN</label>
         <input type="password" id="login-pass" placeholder="••••••••" autocomplete="off"/>
+        <span class="pin-hint" id="login-pin-hint"></span>
       </div>
       <button class="btn-primary" id="btn-login-user">Entrar</button>
-      <p class="login-hint">Si eres administrador, el campo de contraseña aparecerá al escribir tu nombre.</p>
+      <p class="login-hint">Los administradores introducen su contraseña. Los usuarios pueden crear un PIN opcional para proteger su cuenta.</p>
     </div>
 
-    <!-- DEV panel (triple clic esquina inferior derecha) -->
+    <!-- DEV panel: se muestra cuando el nombre escrito es "dev" y se introduce contraseña -->
     <div id="tab-dev" class="tab-dev-hidden">
       <div class="dev-panel-header">
         <span class="dev-badge-label">⚡ DEV MODE</span>
-        <span class="dev-panel-hint">Solo entorno de pruebas</span>
+        <span class="dev-panel-hint">Entorno de pruebas</span>
       </div>
-      <button class="btn-dev-enter" id="btn-login-dev">Entrar como DEV</button>
 
-      <div class="dev-divider">Simular día del mes</div>
+      <div class="dev-divider">Simular fecha completa</div>
       <div class="dev-date-row">
-        <input type="number" id="dev-fake-day" min="1" max="31" placeholder="Día (1-31)" class="dev-input"/>
+        <input type="number" id="dev-fake-day"   min="1"  max="31" placeholder="Día"  class="dev-input" style="width:60px"/>
+        <select id="dev-fake-month" class="dev-input" style="width:100px">
+          <option value="">Mes real</option>
+          <option value="0">Enero</option><option value="1">Febrero</option>
+          <option value="2">Marzo</option><option value="3">Abril</option>
+          <option value="4">Mayo</option><option value="5">Junio</option>
+          <option value="6">Julio</option><option value="7">Agosto</option>
+          <option value="8">Septiembre</option><option value="9">Octubre</option>
+          <option value="10">Noviembre</option><option value="11">Diciembre</option>
+        </select>
+        <input type="number" id="dev-fake-year" min="2024" max="2030" placeholder="Año" class="dev-input" style="width:72px"/>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:5px">
         <button class="btn-dev-apply-date" id="btn-dev-apply-date">Aplicar</button>
         <button class="btn-dev-reset-date" id="btn-dev-reset-date">Reset</button>
       </div>
@@ -93,7 +105,6 @@
       </div>
     </div>
 
-    <div id="dev-trigger" class="dev-trigger"></div>
     <div id="login-error" class="login-error"></div>
   </div>
 </div>
@@ -126,6 +137,7 @@
       <div id="cal-hint" class="cal-hint hidden">
         💡 <strong>Admin:</strong> arrastra un nombre para moverlo · clic en <strong>＋</strong> para añadir · <strong>✕</strong> para eliminar
       </div>
+      <div id="dev-month-debug" class="dev-month-debug hidden"></div>
       <div class="calendar-grid" id="calendar-grid"></div>
       <div id="pdf-section" class="pdf-section hidden">
         <button class="btn-pdf" id="btn-export-pdf">📄 Exportar PDF del mes aprobado</button>
@@ -280,9 +292,21 @@
 
         </div>
 
-        <div class="dev-divider" style="margin:14px 0 10px">Simular día actual</div>
-        <div class="dev-date-row-app">
-          <input type="number" id="dev-fake-day-app" min="1" max="31" placeholder="Día (1-31)" class="dev-input"/>
+        <div class="dev-divider" style="margin:14px 0 10px">Simular fecha actual</div>
+        <div class="dev-date-grid">
+          <input type="number" id="dev-fake-day-app"   min="1"  max="31"  placeholder="Día"  class="dev-input"/>
+          <select id="dev-fake-month-app" class="dev-input">
+            <option value="">Mes real</option>
+            <option value="0">Enero</option><option value="1">Febrero</option>
+            <option value="2">Marzo</option><option value="3">Abril</option>
+            <option value="4">Mayo</option><option value="5">Junio</option>
+            <option value="6">Julio</option><option value="7">Agosto</option>
+            <option value="8">Septiembre</option><option value="9">Octubre</option>
+            <option value="10">Noviembre</option><option value="11">Diciembre</option>
+          </select>
+          <input type="number" id="dev-fake-year-app"  min="2024" max="2030" placeholder="Año" class="dev-input"/>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:5px;margin-bottom:4px">
           <button class="btn-dev-apply-date" id="btn-dev-apply-date-app">Aplicar</button>
           <button class="btn-dev-reset-date" id="btn-dev-reset-date-app">Reset</button>
         </div>
@@ -347,6 +371,6 @@
 <!-- Ghost drag -->
 <div id="drag-ghost" class="drag-ghost hidden"></div>
 
-<script type="module" src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

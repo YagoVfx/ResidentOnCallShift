@@ -1,6 +1,5 @@
 /* =============================================
-   GUARDIAS MIR — APP.JS v5
-   Firebase Firestore — async/await correcto
+   GUARDIAS MIR — APP.JS v6
    ============================================= */
 
 // ============================================================
@@ -11,22 +10,22 @@ const STATE = {
   viewYear:     null,
   viewMonth:    null,
   drag:         null,
-  fakeDay:      null,
+  fakeDay:      null,       // DEV: día simulado
+  fakeMonth:    null,       // DEV: mes simulado (0-based)
+  fakeYear:     null,       // DEV: año simulado
   addModalDay:  null,
   addModalKey:  null,
 };
 
 const SETTINGS_KEY  = 'mir_settings';
 const SHOWN_WELCOME = 'mir_shown_welcome';
+const DEV_PASSWORD  = 'dev123';   // contraseña DEV — no mostrar en UI
 
 // ============================================================
 // CAPA DE DATOS — Firebase Firestore
-// Para volver a localStorage: sustituye dbGet/dbSet por
-// JSON.parse(localStorage.getItem(k)) y localStorage.setItem
 // ============================================================
-
-import { initializeApp }                        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc }    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { initializeApp }                     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyAMo1I-x4TV2yb_snMAjvLw8plReHNjzoY",
@@ -36,173 +35,138 @@ const firebaseConfig = {
   messagingSenderId: "430597501785",
   appId:             "1:430597501785:web:cf0713d0954a96fade9248",
 };
-
 const _app = initializeApp(firebaseConfig);
 const db   = getFirestore(_app);
 
 async function dbGet(key) {
-  try {
-    const snap = await getDoc(doc(db, 'mirapp', key));
-    return snap.exists() ? snap.data().value : null;
-  } catch(e) { console.error('dbGet', key, e); return null; }
+  try { const s=await getDoc(doc(db,'mirapp',key)); return s.exists()?s.data().value:null; }
+  catch(e) { console.error('dbGet',key,e); return null; }
 }
-async function dbSet(key, value) {
-  try {
-    await setDoc(doc(db, 'mirapp', key), { value });
-  } catch(e) { console.error('dbSet', key, e); }
+async function dbSet(key,value) {
+  try { await setDoc(doc(db,'mirapp',key),{value}); }
+  catch(e) { console.error('dbSet',key,e); }
 }
 
-async function loadGuardias()      { return (await dbGet('guardias'))  || {}; }
-async function saveGuardias(d)     { await dbSet('guardias', d); }
-async function loadBackup()        { return await dbGet('guardias_backup'); }
-async function saveBackup(d)       { await dbSet('guardias_backup', d); }
-async function loadUsers()         { return (await dbGet('users'))     || []; }
-async function saveUsers(u)        { await dbSet('users', u); }
-async function loadApproved()      { return (await dbGet('approved'))  || {}; }
-async function saveApproved(d)     { await dbSet('approved', d); }
-async function loadSettings()      { return Object.assign({}, defaultSettings(), (await dbGet('settings')) || {}); }
-async function saveSettings(s)     { await dbSet('settings', s); }
+async function loadGuardias()  { return (await dbGet('guardias'))  || {}; }
+async function saveGuardias(d) { await dbSet('guardias',d); }
+async function loadBackup()    { return await dbGet('guardias_backup'); }
+async function saveBackup(d)   { await dbSet('guardias_backup',d); }
+async function loadUsers()     { return (await dbGet('users'))     || []; }
+async function saveUsers(u)    { await dbSet('users',u); }
+async function loadApproved()  { return (await dbGet('approved'))  || {}; }
+async function saveApproved(d) { await dbSet('approved',d); }
+async function loadSettings()  { return Object.assign({},defaultSettings(),(await dbGet('settings'))||{}); }
+async function saveSettings(s) { await dbSet('settings',s); }
 
-// Bienvenida: local por dispositivo (correcto)
+// Bienvenida y PIN: locales por dispositivo
 function hasSeenWelcome(name) {
-  try { return (JSON.parse(localStorage.getItem(SHOWN_WELCOME)) || []).includes(name); }
+  try { return (JSON.parse(localStorage.getItem(SHOWN_WELCOME))||[]).includes(name); }
   catch { return false; }
 }
 function markWelcomeSeen(name) {
   try {
-    const s = JSON.parse(localStorage.getItem(SHOWN_WELCOME)) || [];
-    if (!s.includes(name)) { s.push(name); localStorage.setItem(SHOWN_WELCOME, JSON.stringify(s)); }
+    const s=JSON.parse(localStorage.getItem(SHOWN_WELCOME))||[];
+    if (!s.includes(name)){ s.push(name); localStorage.setItem(SHOWN_WELCOME,JSON.stringify(s)); }
   } catch {}
 }
+// PIN: guardado como "nombre→pin" en localStorage
+function getPinForUser(name) {
+  try { return (JSON.parse(localStorage.getItem('mir_pins'))||{})[name]||null; }
+  catch { return null; }
+}
+function setPinForUser(name,pin) {
+  try {
+    const p=JSON.parse(localStorage.getItem('mir_pins'))||{};
+    p[name]=pin; localStorage.setItem('mir_pins',JSON.stringify(p));
+  } catch {}
+}
+function hasPinSet(name) { return getPinForUser(name)!==null; }
 
 // ============================================================
 // FIN CAPA DE DATOS
 // ============================================================
 
 function defaultSettings() {
-  return {
-    allowR1R2:  false,
-    levelMix:   true,
-    limitWeek:  true,
-    limitMon:   true,
-    limitSat:   true,
-    limitSun:   true,
-    deadlineOn: true,
-  };
+  return { allowR1R2:false, levelMix:true, limitWeek:true, limitMon:true, limitSat:true, limitSun:true, deadlineOn:true };
 }
 
-// ============================================================
-// ADMIN POR DEFECTO
-// ============================================================
 async function ensureDefaultAdmin() {
-  const users = await loadUsers();
-  if (!users.some(u => u.rol === 'admin')) {
-    users.push({ name: 'Admin', level: 'R4', rol: 'admin', pass: 'admin123' });
+  const users=await loadUsers();
+  if (!users.some(u=>u.rol==='admin')) {
+    users.push({name:'Admin',level:'R4',rol:'admin',pass:'admin123'});
     await saveUsers(users);
   }
 }
 
 // ============================================================
-// FECHA
+// FECHA — respeta fakeDay/fakeMonth/fakeYear del DEV
 // ============================================================
 function today() {
-  const r = new Date();
-  return STATE.fakeDay !== null ? new Date(r.getFullYear(), r.getMonth(), STATE.fakeDay) : r;
+  const r=new Date();
+  const y = STATE.fakeYear  ?? r.getFullYear();
+  const m = STATE.fakeMonth ?? r.getMonth();
+  const d = STATE.fakeDay   ?? r.getDate();
+  return new Date(y,m,d);
 }
-function monthKey(y, m)       { return `${y}-${String(m+1).padStart(2,'0')}`; }
-function daysInMonth(y, m)    { return new Date(y, m+1, 0).getDate(); }
-function firstDayOfMonth(y,m) { const d=new Date(y,m,1).getDay(); return d===0?6:d-1; }
-function dayOfWeek(y, m, d)   { return new Date(y, m, d).getDay(); }
 
-// ============================================================
-// REGLAS DE CAPACIDAD
-// ============================================================
-async function maxGuardsForDay(y, m, d) {
-  const s  = await loadSettings();
-  const wd = dayOfWeek(y, m, d);
-  if (wd===1 && s.limitMon)  return 3;
-  if (wd===6 && s.limitSat)  return 3;
-  if (wd===0 && s.limitSun)  return 3;
-  if (s.limitWeek)           return 2;
+function monthKey(y,m)       { return `${y}-${String(m+1).padStart(2,'0')}`; }
+function daysInMonth(y,m)    { return new Date(y,m+1,0).getDate(); }
+function firstDayOfMonth(y,m){ const d=new Date(y,m,1).getDay(); return d===0?6:d-1; }
+function dayOfWeek(y,m,d)    { return new Date(y,m,d).getDay(); }
+
+async function maxGuardsForDay(y,m,d) {
+  const s=await loadSettings(); const wd=dayOfWeek(y,m,d);
+  if (wd===1&&s.limitMon) return 3;
+  if (wd===6&&s.limitSat) return 3;
+  if (wd===0&&s.limitSun) return 3;
+  if (s.limitWeek)        return 2;
   return 99;
 }
-
-function hasRequiredLevelMix(guards) {
-  if (guards.length < 2) return false;
-  return guards.some(g => g.level==='R3'||g.level==='R4') &&
-         guards.some(g => g.level==='R1'||g.level==='R2');
+function hasRequiredLevelMix(g) {
+  return g.length>=2 && g.some(x=>x.level==='R3'||x.level==='R4') && g.some(x=>x.level==='R1'||x.level==='R2');
 }
-
 async function canPropose(level) {
   if (level==='R3'||level==='R4') return true;
   return (await loadSettings()).allowR1R2;
 }
 
-// ============================================================
-// VALIDACIÓN INPUT DÍAS
-// ============================================================
-function parseDaysInput(raw, y, m) {
-  const maxDay = daysInMonth(y, m);
-  const result = { valid:[], errors:[] };
-  if (/[^0-9,\s]/.test(raw)) { result.errors.push('Solo números separados por comas.'); return result; }
-  const parts = raw.split(',').map(s=>s.trim()).filter(Boolean);
-  if (!parts.length) { result.errors.push('Introduce al menos un día.'); return result; }
-  const seen = new Set();
-  for (const p of parts) {
-    if (!/^\d+$/.test(p)) { result.errors.push(`"${p}" no válido.`); continue; }
-    const n = parseInt(p,10);
-    if (n<1||n>maxDay) { result.errors.push(`Día ${n} fuera de rango (1–${maxDay}).`); continue; }
-    if (seen.has(n))   { result.errors.push(`Día ${n} duplicado.`); continue; }
+function parseDaysInput(raw,y,m) {
+  const maxDay=daysInMonth(y,m); const result={valid:[],errors:[]};
+  if (/[^0-9,\s]/.test(raw)){ result.errors.push('Solo números separados por comas.'); return result; }
+  const parts=raw.split(',').map(s=>s.trim()).filter(Boolean);
+  if (!parts.length){ result.errors.push('Introduce al menos un día.'); return result; }
+  const seen=new Set();
+  for(const p of parts){
+    if(!/^\d+$/.test(p)){ result.errors.push(`"${p}" no válido.`); continue; }
+    const n=parseInt(p,10);
+    if(n<1||n>maxDay){ result.errors.push(`Día ${n} fuera de rango (1–${maxDay}).`); continue; }
+    if(seen.has(n))  { result.errors.push(`Día ${n} duplicado.`); continue; }
     seen.add(n); result.valid.push(n);
   }
   return result;
 }
-
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ============================================================
 // AVISO BIENVENIDA
 // ============================================================
 function showWelcomeIfNeeded(session) {
-  if (session.rol !== 'user') return;
+  if (session.rol!=='user') return;
   if (hasSeenWelcome(session.name)) return;
-  document.getElementById('welcome-name').textContent = session.name;
+  document.getElementById('welcome-name').textContent=session.name;
   document.getElementById('welcome-overlay').classList.remove('hidden');
 }
 function setupWelcome() {
-  document.getElementById('btn-welcome-close').addEventListener('click', () => {
-    markWelcomeSeen(STATE.session?.name || '');
+  document.getElementById('btn-welcome-close').addEventListener('click',()=>{
+    markWelcomeSeen(STATE.session?.name||'');
     document.getElementById('welcome-overlay').classList.add('hidden');
   });
-}
-
-// ============================================================
-// DEV TRIGGER
-// ============================================================
-function setupDevTrigger() {
-  let clicks=0, timer=null;
-  document.getElementById('dev-trigger').addEventListener('click', () => {
-    clicks++;
-    clearTimeout(timer);
-    timer = setTimeout(()=>{ clicks=0; }, 800);
-    if (clicks>=3) { clicks=0; toggleDevPanel(); }
-  });
-}
-function toggleDevPanel() {
-  const tab = document.getElementById('tab-dev');
-  const vis = tab.classList.contains('dev-visible');
-  tab.classList.toggle('dev-visible', !vis);
-  tab.classList.toggle('tab-dev-hidden', vis);
-  if (!vis) renderDevLoginList();
 }
 
 // ============================================================
 // LOGIN
 // ============================================================
 function setupLogin() {
-  setupDevTrigger();
   setupWelcome();
 
   const nameEl   = document.getElementById('login-name');
@@ -210,81 +174,149 @@ function setupLogin() {
   const passGrp  = document.getElementById('login-admin-pass-group');
   const passEl   = document.getElementById('login-pass');
 
+  // Al escribir nombre: detectar si es admin conocido → mostrar pass
+  // También detectar si es "dev" (sin revelar nada en UI, solo mostrar pass)
   nameEl.addEventListener('input', async () => {
-    const name = nameEl.value.trim();
-    const users = await loadUsers();
-    const isAdmin = users.some(u => u.name===name && u.rol==='admin');
-    passGrp.classList.toggle('hidden', !isAdmin);
-    levelGrp.classList.toggle('hidden', isAdmin);
+    const name=nameEl.value.trim().toLowerCase();
+    const users=await loadUsers();
+    const isAdmin=users.some(u=>u.name.toLowerCase()===name&&u.rol==='admin');
+    const isDev=(name==='dev');
+    const showPass=isAdmin||isDev;
+    passGrp.classList.toggle('hidden',!showPass);
+    levelGrp.classList.toggle('hidden',showPass);
+
+    // Show DEV panel when name is "dev"
+    const devTab=document.getElementById('tab-dev');
+    if (isDev) {
+      devTab.classList.remove('tab-dev-hidden'); devTab.classList.add('dev-visible');
+      renderDevLoginList();
+    } else {
+      devTab.classList.add('tab-dev-hidden'); devTab.classList.remove('dev-visible');
+    }
+
+    // PIN hint for registered users
+    const pinHint=document.getElementById('login-pin-hint');
+    if (pinHint) {
+      const matched=users.find(u=>u.name.toLowerCase()===name&&u.rol==='user');
+      if (matched) {
+        if (hasPinSet(matched.name)) {
+          pinHint.textContent='Este usuario tiene PIN configurado.';
+          passGrp.classList.remove('hidden'); levelGrp.classList.add('hidden');
+        } else {
+          pinHint.textContent='Primera vez: puedes crear un PIN opcional.';
+          passGrp.classList.remove('hidden');
+        }
+      } else { pinHint.textContent=''; }
+    }
   });
 
   document.getElementById('btn-login-user').addEventListener('click', doLogin);
-  nameEl.addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
-  passEl.addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+  nameEl.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  passEl.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 
-  document.getElementById('btn-login-dev').addEventListener('click', () =>
-    startSession({ name:'DEV', level:'R4', rol:'dev' })
-  );
   document.getElementById('btn-dev-quick-create').addEventListener('click', devQuickCreate);
 
-  document.getElementById('btn-dev-apply-date').addEventListener('click', () => {
-    const v = parseInt(document.getElementById('dev-fake-day').value, 10);
-    if (isNaN(v)||v<1||v>31) { document.getElementById('dev-fake-day-status').textContent='❌ Día inválido.'; return; }
-    STATE.fakeDay = v;
-    document.getElementById('dev-fake-day-status').textContent = `✅ Día simulado: ${v}`;
-  });
-  document.getElementById('btn-dev-reset-date').addEventListener('click', () => {
-    STATE.fakeDay = null;
-    document.getElementById('dev-fake-day').value = '';
-    document.getElementById('dev-fake-day-status').textContent = 'Usando fecha real.';
-  });
+  // DEV fake day login
+  document.getElementById('btn-dev-apply-date').addEventListener('click', applyFakeDateLogin);
+  document.getElementById('btn-dev-reset-date').addEventListener('click', resetFakeDateLogin);
+}
+
+function applyFakeDateLogin() {
+  const dv=parseInt(document.getElementById('dev-fake-day').value,10)||null;
+  const mv=document.getElementById('dev-fake-month')?.value;
+  const yv=parseInt(document.getElementById('dev-fake-year')?.value,10)||null;
+  const st=document.getElementById('dev-fake-day-status');
+  const now=new Date();
+  STATE.fakeDay   = (dv>=1&&dv<=31)?dv:null;
+  STATE.fakeMonth = (mv!==''&&mv!==undefined&&mv!==null)?parseInt(mv,10):null;
+  STATE.fakeYear  = yv||null;
+  if (STATE.fakeDay||STATE.fakeMonth!==null||STATE.fakeYear) {
+    const td=today();
+    st.textContent=`✅ Simulando: ${td.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}`;
+  } else { st.textContent='Sin simulación activa.'; }
+}
+function resetFakeDateLogin() {
+  STATE.fakeDay=null; STATE.fakeMonth=null; STATE.fakeYear=null;
+  const d=document.getElementById('dev-fake-day'); if(d) d.value='';
+  const m=document.getElementById('dev-fake-month'); if(m) m.value='';
+  const y=document.getElementById('dev-fake-year'); if(y) y.value='';
+  document.getElementById('dev-fake-day-status').textContent='Usando fecha real.';
 }
 
 async function doLogin() {
-  const name  = document.getElementById('login-name').value.trim();
-  const level = document.getElementById('login-level').value;
-  const pass  = document.getElementById('login-pass').value;
+  const nameRaw = document.getElementById('login-name').value.trim();
+  const level   = document.getElementById('login-level').value;
+  const pass    = document.getElementById('login-pass').value;
+  if (!nameRaw) { showLoginError('Introduce tu nombre.'); return; }
 
-  if (!name) { showLoginError('Introduce tu nombre.'); return; }
-
-  const users = await loadUsers();
-  const admin = users.find(u => u.name===name && u.rol==='admin');
-
-  if (admin) {
-    if (admin.pass && admin.pass!==pass) { showLoginError('Contraseña incorrecta.'); return; }
-    startSession({ name:admin.name, level:admin.level||'R4', rol:'admin' });
+  // DEV login (nombre "dev", contraseña dev123) — sin pistas en UI
+  if (nameRaw.toLowerCase()==='dev') {
+    if (pass!==DEV_PASSWORD) { showLoginError('Credenciales incorrectas.'); return; }
+    startSession({name:'DEV',level:'R4',rol:'dev'});
     return;
   }
 
-  if (!level) { showLoginError('Selecciona tu nivel MIR.'); return; }
-  if (!users.some(u => u.name===name && u.rol==='user')) {
-    users.push({ name, level, rol:'user' });
-    await saveUsers(users);
+  const users=await loadUsers();
+  // Buscar nombre exacto (case-insensitive)
+  const matched=users.find(u=>u.name.toLowerCase()===nameRaw.toLowerCase());
+
+  if (matched && matched.rol==='admin') {
+    if (matched.pass && matched.pass!==pass) { showLoginError('Contraseña incorrecta.'); return; }
+    startSession({name:matched.name,level:matched.level||'R4',rol:'admin'});
+    return;
   }
-  startSession({ name, level, rol:'user' });
+
+  // Usuario normal
+  if (!level) { showLoginError('Selecciona tu nivel MIR.'); return; }
+
+  // Si el nombre ya existe como usuario registrado, verificar nivel coincide
+  if (matched && matched.rol==='user') {
+    // Nombre registrado: verificar PIN si ya lo tiene
+    if (hasPinSet(matched.name)) {
+      if (!pass) { showLoginError('Introduce tu PIN personal.'); return; }
+      if (getPinForUser(matched.name)!==pass) { showLoginError('PIN incorrecto.'); return; }
+    } else {
+      // Primera vez: si escribió contraseña, la usamos como PIN
+      if (pass) { setPinForUser(matched.name, pass); }
+    }
+    startSession({name:matched.name, level:matched.level||level, rol:'user'});
+    return;
+  }
+
+  // Nombre nuevo: comprobar que no existe ya (sin importar capitalización)
+  if (users.some(u=>u.name.toLowerCase()===nameRaw.toLowerCase())) {
+    showLoginError('Ese nombre ya está registrado. Usa exactamente el mismo nombre que la primera vez.');
+    return;
+  }
+
+  // Registrar nuevo usuario
+  // Si escribió contraseña en el campo pass, guardarla como PIN
+  if (pass) { setPinForUser(nameRaw, pass); }
+  users.push({name:nameRaw, level, rol:'user'});
+  await saveUsers(users);
+  startSession({name:nameRaw, level, rol:'user'});
 }
 
 async function devQuickCreate() {
-  const name  = document.getElementById('dev-quick-name').value.trim();
-  const level = document.getElementById('dev-quick-level').value;
-  const rol   = document.getElementById('dev-quick-rol').value;
+  const name =document.getElementById('dev-quick-name').value.trim();
+  const level=document.getElementById('dev-quick-level').value;
+  const rol  =document.getElementById('dev-quick-rol').value;
   if (!name) { showLoginError('Introduce un nombre.'); return; }
-  const users = await loadUsers();
-  if (users.some(u => u.name===name)) { showLoginError('Nombre ya existente.'); return; }
-  const u = { name, level, rol };
-  if (rol==='admin') u.pass = 'admin123';
-  users.push(u);
-  await saveUsers(users);
-  document.getElementById('dev-quick-name').value = '';
+  const users=await loadUsers();
+  if (users.some(u=>u.name.toLowerCase()===name.toLowerCase())) { showLoginError('Nombre ya existente.'); return; }
+  const u={name,level,rol};
+  if (rol==='admin') u.pass='admin123';
+  users.push(u); await saveUsers(users);
+  document.getElementById('dev-quick-name').value='';
   renderDevLoginList();
-  startSession({ name, level, rol });
+  startSession({name,level,rol});
 }
 
 async function renderDevLoginList() {
-  const users = await loadUsers();
-  const el = document.getElementById('dev-login-users-list');
-  if (!users.length) { el.innerHTML='<p style="color:#444;font-size:11px;text-align:center">Sin usuarios</p>'; return; }
-  el.innerHTML = users.map((u,i) => `
+  const users=await loadUsers();
+  const el=document.getElementById('dev-login-users-list');
+  if (!users.length){ el.innerHTML='<p style="color:#444;font-size:11px;text-align:center">Sin usuarios</p>'; return; }
+  el.innerHTML=users.map((u,i)=>`
     <div class="dev-login-user-item">
       <span class="info"><strong>${escHtml(u.name)}</strong> ${u.level?'· '+u.level:''}</span>
       <span class="dev-login-user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span>
@@ -296,185 +328,146 @@ async function renderDevLoginList() {
 }
 
 async function devLoginAs(i) {
-  const users = await loadUsers();
-  const u = users[i];
-  if (u) startSession({ name:u.name, level:u.level||'R4', rol:u.rol });
+  const users=await loadUsers(); const u=users[i];
+  if (u) startSession({name:u.name,level:u.level||'R4',rol:u.rol});
 }
 async function devDelFromLogin(i) {
-  const users = await loadUsers();
-  const x = users[i]; if (!x) return;
-  if (x.rol==='admin' && users.filter(a=>a.rol==='admin').length<=1) { showLoginError('Mínimo 1 admin.'); return; }
-  users.splice(i,1);
-  await saveUsers(users);
-  renderDevLoginList();
+  const users=await loadUsers(); const x=users[i]; if (!x) return;
+  if (x.rol==='admin'&&users.filter(a=>a.rol==='admin').length<=1){ showLoginError('Mínimo 1 admin.'); return; }
+  users.splice(i,1); await saveUsers(users); renderDevLoginList();
 }
 
 function showLoginError(msg) {
-  const el = document.getElementById('login-error');
-  el.textContent = msg;
-  setTimeout(()=>{ el.textContent=''; }, 4000);
+  const el=document.getElementById('login-error');
+  el.textContent=msg; setTimeout(()=>{ el.textContent=''; },4000);
 }
 
 // ============================================================
 // SESIÓN
 // ============================================================
-let navReady = false;
-
+let navReady=false;
 function startSession(sess) {
-  STATE.session = sess;
-  const now = today();
-  STATE.viewYear  = now.getFullYear();
-  STATE.viewMonth = now.getMonth();
-
+  STATE.session=sess;
+  const now=today();
+  STATE.viewYear=now.getFullYear(); STATE.viewMonth=now.getMonth();
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-
-  renderTopbar();
-  renderSidebar();
-  renderCalendar();
-  if (!navReady) { setupNavigation(); navReady=true; }
+  renderTopbar(); renderSidebar(); renderCalendar();
+  if (!navReady){ setupNavigation(); navReady=true; }
   showWelcomeIfNeeded(sess);
 }
 
 function logout() {
-  STATE.session = null;
+  STATE.session=null;
   document.getElementById('welcome-overlay').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('login-name').value  = '';
-  document.getElementById('login-level').value = '';
-  document.getElementById('login-pass').value  = '';
-  document.getElementById('login-error').textContent = '';
+  document.getElementById('login-name').value='';
+  document.getElementById('login-level').value='';
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-error').textContent='';
   document.getElementById('login-admin-pass-group').classList.add('hidden');
   document.getElementById('login-level-group').classList.remove('hidden');
-  const tab = document.getElementById('tab-dev');
-  tab.classList.remove('dev-visible');
-  tab.classList.add('tab-dev-hidden');
+  // Ocultar DEV panel
+  const tab=document.getElementById('tab-dev');
+  tab.classList.remove('dev-visible'); tab.classList.add('tab-dev-hidden');
 }
 
 // ============================================================
 // TOPBAR
 // ============================================================
 function renderTopbar() {
-  const { session } = STATE;
-  const rolEl = document.getElementById('topbar-rol');
-  rolEl.textContent = session.rol.toUpperCase();
-  rolEl.className   = `topbar-rol rol-${session.rol}`;
-  document.getElementById('topbar-user').textContent =
-    session.name + (session.level ? ` · ${session.level}` : '');
+  const {session}=STATE;
+  const rolEl=document.getElementById('topbar-rol');
+  rolEl.textContent=session.rol.toUpperCase(); rolEl.className=`topbar-rol rol-${session.rol}`;
+  document.getElementById('topbar-user').textContent=session.name+(session.level?` · ${session.level}`:'');
 }
 
 // ============================================================
 // SIDEBAR
 // ============================================================
 async function renderSidebar() {
-  const { session } = STATE;
-  const rol  = session.rol;
-  const isAdm = rol==='admin'||rol==='dev';
-
-  document.getElementById('admin-card').classList.toggle('hidden', !isAdm);
-  document.getElementById('dev-card').classList.toggle('hidden', rol!=='dev');
-  document.getElementById('users-card').classList.toggle('hidden', !isAdm);
-  document.getElementById('cal-hint').classList.toggle('hidden', !isAdm);
-
-  document.getElementById('prop-name').value  = session.name;
-  document.getElementById('prop-level').value = session.level;
-
-  if (rol==='dev') await syncDevToggles();
+  const {session}=STATE; const rol=session.rol; const isAdm=rol==='admin'||rol==='dev';
+  document.getElementById('admin-card').classList.toggle('hidden',!isAdm);
+  document.getElementById('dev-card').classList.toggle('hidden',rol!=='dev');
+  document.getElementById('users-card').classList.toggle('hidden',!isAdm);
+  document.getElementById('cal-hint').classList.toggle('hidden',!isAdm);
+  document.getElementById('prop-name').value=session.name;
+  document.getElementById('prop-level').value=session.level;
+  if (rol==='dev') { await syncDevToggles(); renderDevSwitchList(); }
   await updateFormState();
+  if (isAdm) { await renderUsersList(); }
   if (isAdm) {
-    await renderUsersList();
-    if (rol==='dev') await renderDevSwitchList();
-  }
-  if (isAdm) {
-    const key = monthKey(STATE.viewYear, STATE.viewMonth);
-    const approved = await loadApproved();
-    document.getElementById('admin-status').textContent =
-      approved[key] ? '✅ Mes aprobado' : '📋 Mes pendiente';
+    const key=monthKey(STATE.viewYear,STATE.viewMonth);
+    const approved=await loadApproved();
+    document.getElementById('admin-status').textContent=approved[key]?'✅ Mes aprobado':'📋 Mes pendiente';
   }
 }
 
 async function syncDevToggles() {
-  const s = await loadSettings();
-  document.getElementById('toggle-r1r2').checked       = s.allowR1R2;
-  document.getElementById('toggle-level-mix').checked  = s.levelMix;
-  document.getElementById('toggle-limit-week').checked = s.limitWeek;
-  document.getElementById('toggle-limit-mon').checked  = s.limitMon;
-  document.getElementById('toggle-limit-sat').checked  = s.limitSat;
-  document.getElementById('toggle-limit-sun').checked  = s.limitSun;
-  document.getElementById('toggle-deadline').checked   = s.deadlineOn;
+  const s=await loadSettings();
+  document.getElementById('toggle-r1r2').checked       =s.allowR1R2;
+  document.getElementById('toggle-level-mix').checked  =s.levelMix;
+  document.getElementById('toggle-limit-week').checked =s.limitWeek;
+  document.getElementById('toggle-limit-mon').checked  =s.limitMon;
+  document.getElementById('toggle-limit-sat').checked  =s.limitSat;
+  document.getElementById('toggle-limit-sun').checked  =s.limitSun;
+  document.getElementById('toggle-deadline').checked   =s.deadlineOn;
 }
 
 async function updateFormState() {
-  const { session, viewYear, viewMonth } = STATE;
-  const now  = today();
-  const curY = now.getFullYear(), curM = now.getMonth(), curD = now.getDate();
-  const s    = await loadSettings();
-  const isNextMonth    = (viewYear>curY)||(viewYear===curY&&viewMonth>curM);
-  const isCurrentMonth = viewYear===curY && viewMonth===curM;
-
-  const warnEl = document.getElementById('form-deadline-warning');
-  const infoEl = document.getElementById('form-current-month-info');
-  const btn    = document.getElementById('btn-submit-prop');
-
-  warnEl.classList.add('hidden');
-  infoEl.classList.add('hidden');
-  btn.disabled = false;
-
-  const propose = await canPropose(session.level);
-  if (!propose) {
+  const {session,viewYear,viewMonth}=STATE;
+  const now=today(); const curY=now.getFullYear(),curM=now.getMonth(),curD=now.getDate();
+  const s=await loadSettings();
+  const isNextMonth=(viewYear>curY)||(viewYear===curY&&viewMonth>curM);
+  const isCurrentMonth=viewYear===curY&&viewMonth===curM;
+  const warnEl=document.getElementById('form-deadline-warning');
+  const infoEl=document.getElementById('form-current-month-info');
+  const btn=document.getElementById('btn-submit-prop');
+  warnEl.classList.add('hidden'); infoEl.classList.add('hidden'); btn.disabled=false;
+  if (!(await canPropose(session.level))) {
     warnEl.classList.remove('hidden');
-    warnEl.textContent = `ℹ️ Tu nivel (${session.level}) no puede proponer guardias aún. El DEV puede activarlo.`;
-    btn.disabled = true;
-    return;
+    warnEl.textContent=`ℹ️ Tu nivel (${session.level}) no puede proponer guardias aún. El administrador puede activarlo.`;
+    btn.disabled=true; return;
   }
-  if (isNextMonth && s.deadlineOn && curD>15) {
+  if (isNextMonth&&s.deadlineOn&&curD>15) {
     warnEl.classList.remove('hidden');
-    warnEl.textContent = '⚠️ Plazo cerrado. Las propuestas del mes siguiente se cierran el día 15 a las 00:00.';
-    btn.disabled = true;
-    return;
+    warnEl.textContent='⚠️ Plazo cerrado. Las propuestas del mes siguiente se cierran el día 15 a las 00:00.';
+    btn.disabled=true; return;
   }
   if (isCurrentMonth) infoEl.classList.remove('hidden');
 }
 
 async function renderUsersList() {
-  const users = await loadUsers();
-  document.getElementById('users-count-badge').textContent = users.length;
-  const el = document.getElementById('users-list');
-  el.innerHTML = users.length
-    ? users.map(u=>`
-        <div class="user-item">
-          <span class="user-item-name">${escHtml(u.name)} <small>${u.level||''}</small></span>
-          <span class="user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span>
-        </div>`).join('')
-    : '<p style="color:#444;font-size:12px;text-align:center;padding:4px 0">Sin usuarios</p>';
+  const users=await loadUsers();
+  document.getElementById('users-count-badge').textContent=users.length;
+  const el=document.getElementById('users-list');
+  el.innerHTML=users.length
+    ?users.map(u=>`<div class="user-item"><span class="user-item-name">${escHtml(u.name)} <small>${u.level||''}</small></span><span class="user-badge badge-${u.rol}">${u.rol.toUpperCase()}</span></div>`).join('')
+    :'<p style="color:#444;font-size:12px;text-align:center;padding:4px 0">Sin usuarios</p>';
 }
 
 async function renderDevSwitchList() {
-  const users = await loadUsers();
-  const el = document.getElementById('dev-user-switch-list');
-  el.innerHTML = users.length
-    ? users.map((u,i)=>`
-        <div class="switch-item">
-          <span class="info"><strong>${escHtml(u.name)}</strong> ${u.level?'·'+u.level:''} <span class="dev-login-user-badge badge-${u.rol}">${u.rol}</span></span>
-          <button class="btn-switch" onclick="devSwitchInApp(${i})">Entrar</button>
-          <button class="btn-del"    onclick="devDelInApp(${i})">✕</button>
-        </div>`).join('')
-    : '<p style="color:#444;font-size:11px">Sin usuarios</p>';
+  const users=await loadUsers();
+  const el=document.getElementById('dev-user-switch-list');
+  if (!users.length){ el.innerHTML='<p style="color:#444;font-size:11px">Sin usuarios</p>'; return; }
+  el.innerHTML=users.map((u,i)=>`
+    <div class="switch-item">
+      <span class="info"><strong>${escHtml(u.name)}</strong> ${u.level?'·'+u.level:''} <span class="dev-login-user-badge badge-${u.rol}">${u.rol}</span></span>
+      <button class="btn-switch" onclick="devSwitchInApp(${i})">Entrar</button>
+      <button class="btn-del"    onclick="devDelInApp(${i})">✕</button>
+    </div>`).join('');
 }
 
 async function devSwitchInApp(i) {
-  const users = await loadUsers();
-  const u = users[i]; if (!u) return;
-  STATE.session = { name:u.name, level:u.level||'R4', rol:u.rol };
+  const users=await loadUsers(); const u=users[i]; if(!u) return;
+  STATE.session={name:u.name,level:u.level||'R4',rol:u.rol};
   renderTopbar(); renderSidebar(); renderCalendar();
 }
 async function devDelInApp(i) {
-  const users = await loadUsers();
-  const x = users[i]; if (!x) return;
-  if (x.rol==='admin' && users.filter(a=>a.rol==='admin').length<=1) { alert('Mínimo 1 admin.'); return; }
-  users.splice(i,1);
-  await saveUsers(users);
+  const users=await loadUsers(); const x=users[i]; if(!x) return;
+  if (x.rol==='admin'&&users.filter(a=>a.rol==='admin').length<=1){ alert('Mínimo 1 admin.'); return; }
+  users.splice(i,1); await saveUsers(users);
   renderDevSwitchList(); renderUsersList();
 }
 
@@ -482,76 +475,84 @@ async function devDelInApp(i) {
 // NAVEGACIÓN
 // ============================================================
 function setupNavigation() {
-  document.getElementById('btn-prev').addEventListener('click', navPrev);
-  document.getElementById('btn-next').addEventListener('click', navNext);
-  document.getElementById('btn-logout').addEventListener('click', logout);
-  document.getElementById('btn-submit-prop').addEventListener('click', submitProposal);
-  document.getElementById('btn-approve').addEventListener('click', approveMonth);
-  document.getElementById('btn-reset').addEventListener('click', resetMonth);
-  document.getElementById('btn-restore').addEventListener('click', restoreBackup);
-  document.getElementById('btn-dev-create').addEventListener('click', devCreateUser);
-  document.getElementById('btn-export-pdf').addEventListener('click', ()=>window.print());
-  document.getElementById('btn-admin-add-user').addEventListener('click', adminAddUser);
-  document.getElementById('admin-new-name').addEventListener('keydown', e=>{ if(e.key==='Enter') adminAddUser(); });
+  document.getElementById('btn-prev').addEventListener('click',navPrev);
+  document.getElementById('btn-next').addEventListener('click',navNext);
+  document.getElementById('btn-logout').addEventListener('click',logout);
+  document.getElementById('btn-submit-prop').addEventListener('click',submitProposal);
+  document.getElementById('btn-approve').addEventListener('click',approveMonth);
+  document.getElementById('btn-reset').addEventListener('click',resetMonth);
+  document.getElementById('btn-restore').addEventListener('click',restoreBackup);
+  document.getElementById('btn-dev-create').addEventListener('click',devCreateUser);
+  document.getElementById('btn-export-pdf').addEventListener('click',()=>window.print());
+  document.getElementById('btn-admin-add-user').addEventListener('click',adminAddUser);
+  document.getElementById('admin-new-name').addEventListener('keydown',e=>{ if(e.key==='Enter') adminAddUser(); });
 
-  document.getElementById('prop-days').addEventListener('input', () => {
-    const raw = document.getElementById('prop-days').value;
-    if (/[^0-9,\s]/.test(raw)) {
-      document.getElementById('prop-days').value = raw.replace(/[^0-9,\s]/g,'');
-      document.getElementById('prop-days-warning').textContent = 'Solo números separados por comas.';
-    } else document.getElementById('prop-days-warning').textContent = '';
+  document.getElementById('prop-days').addEventListener('input',()=>{
+    const raw=document.getElementById('prop-days').value;
+    if(/[^0-9,\s]/.test(raw)){
+      document.getElementById('prop-days').value=raw.replace(/[^0-9,\s]/g,'');
+      document.getElementById('prop-days-warning').textContent='Solo números separados por comas.';
+    } else document.getElementById('prop-days-warning').textContent='';
   });
-  document.getElementById('prop-count').addEventListener('input', () => {
-    const v = parseInt(document.getElementById('prop-count').value,10);
-    if (v<1) document.getElementById('prop-count').value=1;
-    if (v>5) document.getElementById('prop-count').value=5;
+  document.getElementById('prop-count').addEventListener('input',()=>{
+    const v=parseInt(document.getElementById('prop-count').value,10);
+    if(v<1) document.getElementById('prop-count').value=1;
+    if(v>5) document.getElementById('prop-count').value=5;
   });
 
-  // DEV toggles
-  const toggleMap = {
-    'toggle-r1r2':'allowR1R2','toggle-level-mix':'levelMix',
-    'toggle-limit-week':'limitWeek','toggle-limit-mon':'limitMon',
-    'toggle-limit-sat':'limitSat','toggle-limit-sun':'limitSun',
-    'toggle-deadline':'deadlineOn',
-  };
-  Object.entries(toggleMap).forEach(([id,key]) => {
-    document.getElementById(id).addEventListener('change', async e => {
-      const s = await loadSettings(); s[key]=e.target.checked; await saveSettings(s);
+  const toggleMap={'toggle-r1r2':'allowR1R2','toggle-level-mix':'levelMix','toggle-limit-week':'limitWeek',
+    'toggle-limit-mon':'limitMon','toggle-limit-sat':'limitSat','toggle-limit-sun':'limitSun','toggle-deadline':'deadlineOn'};
+  Object.entries(toggleMap).forEach(([id,key])=>{
+    document.getElementById(id).addEventListener('change',async e=>{
+      const s=await loadSettings(); s[key]=e.target.checked; await saveSettings(s);
       updateFormState(); renderCalendar();
     });
   });
 
-  // DEV fake day en app
-  document.getElementById('btn-dev-apply-date-app').addEventListener('click', () => {
-    const v = parseInt(document.getElementById('dev-fake-day-app').value,10);
-    const st = document.getElementById('dev-fake-day-status-app');
-    if (isNaN(v)||v<1||v>31) { st.textContent='❌ Inválido.'; return; }
-    STATE.fakeDay=v; st.textContent=`✅ Simulando día ${v}`;
-    updateFormState(); renderCalendar();
-  });
-  document.getElementById('btn-dev-reset-date-app').addEventListener('click', () => {
-    STATE.fakeDay=null;
-    document.getElementById('dev-fake-day-app').value='';
-    document.getElementById('dev-fake-day-status-app').textContent='Fecha real restaurada.';
-    updateFormState(); renderCalendar();
-  });
+  // DEV fake date en app
+  document.getElementById('btn-dev-apply-date-app').addEventListener('click', applyFakeDateApp);
+  document.getElementById('btn-dev-reset-date-app').addEventListener('click', resetFakeDateApp);
 
-  document.getElementById('add-modal-close').addEventListener('click', closeAddModal);
-  document.getElementById('add-modal').addEventListener('click', e=>{
-    if (e.target===document.getElementById('add-modal')) closeAddModal();
-  });
-  document.getElementById('btn-add-modal-confirm').addEventListener('click', confirmAddModal);
+  document.getElementById('add-modal-close').addEventListener('click',closeAddModal);
+  document.getElementById('add-modal').addEventListener('click',e=>{ if(e.target===document.getElementById('add-modal')) closeAddModal(); });
+  document.getElementById('btn-add-modal-confirm').addEventListener('click',confirmAddModal);
+}
+
+function applyFakeDateApp() {
+  const dv=parseInt(document.getElementById('dev-fake-day-app').value,10)||null;
+  const mv=document.getElementById('dev-fake-month-app').value;
+  const yv=parseInt(document.getElementById('dev-fake-year-app').value,10)||null;
+  const st=document.getElementById('dev-fake-day-status-app');
+  STATE.fakeDay   = (dv>=1&&dv<=31)?dv:null;
+  STATE.fakeMonth = (mv!=='')?parseInt(mv,10):null;
+  STATE.fakeYear  = yv||null;
+  if (STATE.fakeDay!==null||STATE.fakeMonth!==null||STATE.fakeYear!==null) {
+    const td=today();
+    st.textContent=`✅ ${td.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}`;
+    // Resincronizar vista al mes simulado si corresponde
+    STATE.viewYear=td.getFullYear(); STATE.viewMonth=td.getMonth();
+  } else { st.textContent='Fecha real restaurada.'; }
+  updateFormState(); renderCalendar();
+}
+function resetFakeDateApp() {
+  STATE.fakeDay=null; STATE.fakeMonth=null; STATE.fakeYear=null;
+  document.getElementById('dev-fake-day-app').value='';
+  document.getElementById('dev-fake-month-app').value='';
+  document.getElementById('dev-fake-year-app').value='';
+  document.getElementById('dev-fake-day-status-app').textContent='Fecha real restaurada.';
+  const now=new Date(); STATE.viewYear=now.getFullYear(); STATE.viewMonth=now.getMonth();
+  updateFormState(); renderCalendar();
 }
 
 function navPrev() {
   const now=today();
-  if (STATE.viewYear===now.getFullYear()&&STATE.viewMonth===now.getMonth()) return;
+  if(STATE.viewYear===now.getFullYear()&&STATE.viewMonth===now.getMonth()) return;
   STATE.viewMonth--; if(STATE.viewMonth<0){STATE.viewMonth=11;STATE.viewYear--;}
   renderCalendar(); updateFormState();
 }
 function navNext() {
   const now=today(); let ny=now.getFullYear(),nm=now.getMonth()+1; if(nm>11){nm=0;ny++;}
-  if (STATE.viewYear===ny&&STATE.viewMonth===nm) return;
+  if(STATE.viewYear===ny&&STATE.viewMonth===nm) return;
   STATE.viewMonth++; if(STATE.viewMonth>11){STATE.viewMonth=0;STATE.viewYear++;}
   renderCalendar(); updateFormState();
 }
@@ -560,14 +561,14 @@ function navNext() {
 // ADMIN: AÑADIR USUARIO
 // ============================================================
 async function adminAddUser() {
-  const name   = document.getElementById('admin-new-name').value.trim();
-  const level  = document.getElementById('admin-new-level').value;
-  const warnEl = document.getElementById('admin-add-user-warning');
-  warnEl.textContent = '';
-  if (!name) { warnEl.textContent='Introduce un nombre.'; return; }
-  const users = await loadUsers();
-  if (users.some(u=>u.name===name)) { warnEl.textContent='Ese nombre ya está registrado.'; return; }
-  users.push({ name, level, rol:'user' });
+  const name =document.getElementById('admin-new-name').value.trim();
+  const level=document.getElementById('admin-new-level').value;
+  const warnEl=document.getElementById('admin-add-user-warning');
+  warnEl.textContent=''; warnEl.style.color='';
+  if (!name){ warnEl.textContent='Introduce un nombre.'; return; }
+  const users=await loadUsers();
+  if (users.some(u=>u.name.toLowerCase()===name.toLowerCase())){ warnEl.textContent='Ese nombre ya está registrado.'; return; }
+  users.push({name,level,rol:'user'});
   await saveUsers(users);
   document.getElementById('admin-new-name').value='';
   renderUsersList();
@@ -580,85 +581,78 @@ async function adminAddUser() {
 // CALENDARIO
 // ============================================================
 async function renderCalendar() {
-  const { viewYear:y, viewMonth:m, session } = STATE;
-  const now  = today();
-  const curY = now.getFullYear(), curM = now.getMonth();
+  const {viewYear:y,viewMonth:m,session}=STATE;
+  const now=today(); const curY=now.getFullYear(),curM=now.getMonth();
 
-  await cleanOldMonths(curY, curM);
+  await cleanOldMonths(curY,curM);
 
-  const title = new Date(y,m,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'});
-  document.getElementById('calendar-title').textContent = title.charAt(0).toUpperCase()+title.slice(1);
+  const title=new Date(y,m,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+  document.getElementById('calendar-title').textContent=title.charAt(0).toUpperCase()+title.slice(1);
 
-  document.getElementById('btn-prev').disabled = (y===curY&&m===curM);
+  document.getElementById('btn-prev').disabled=(y===curY&&m===curM);
   let ny=curY,nm=curM+1; if(nm>11){nm=0;ny++;}
-  document.getElementById('btn-next').disabled = (y===ny&&m===nm);
+  document.getElementById('btn-next').disabled=(y===ny&&m===nm);
 
-  const guardias   = await loadGuardias();
-  const key        = monthKey(y,m);
-  const monthData  = guardias[key]||{};
-  const approved   = await loadApproved();
-  const isApproved = !!approved[key];
-  const rol        = session.rol;
-  const isAdm      = rol==='admin'||rol==='dev';
-  const isUser     = rol==='user';
+  const guardias=await loadGuardias(); const key=monthKey(y,m);
+  const monthData=guardias[key]||{};
+  const approved=await loadApproved(); const isApproved=!!approved[key];
+  const rol=session.rol; const isAdm=rol==='admin'||rol==='dev'; const isUser=rol==='user';
 
-  const firstDay   = firstDayOfMonth(y,m);
-  const totalDays  = daysInMonth(y,m);
-  const totalCells = Math.ceil((firstDay+totalDays)/7)*7;
+  const firstDay=firstDayOfMonth(y,m); const totalDays=daysInMonth(y,m);
+  const totalCells=Math.ceil((firstDay+totalDays)/7)*7;
+  const grid=document.getElementById('calendar-grid'); grid.innerHTML='';
 
-  const grid = document.getElementById('calendar-grid');
-  grid.innerHTML = '';
+  // Panel debug DEV: muestra mes actual simulado vs meses disponibles
+  const debugEl=document.getElementById('dev-month-debug');
+  if (debugEl) {
+    if (rol==='dev') {
+      const simulatedNow=today();
+      const curLabel=simulatedNow.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+      let nextY=simulatedNow.getFullYear(),nextM=simulatedNow.getMonth()+1;
+      if(nextM>11){nextM=0;nextY++;}
+      const nextLabel=new Date(nextY,nextM,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+      debugEl.textContent=`📅 Hoy simulado: ${simulatedNow.toLocaleDateString('es-ES')} | Mes visible: ${title} | Disponibles: ${curLabel} y ${nextLabel}`;
+      debugEl.classList.remove('hidden');
+    } else { debugEl.classList.add('hidden'); }
+  }
 
-  for (let i=0; i<totalCells; i++) {
-    const dn   = i - firstDay + 1;
-    const cell = document.createElement('div');
+  for(let i=0;i<totalCells;i++){
+    const dn=i-firstDay+1; const cell=document.createElement('div');
+    if(i<firstDay||dn>totalDays){ cell.className='cal-day empty'; grid.appendChild(cell); continue; }
 
-    if (i<firstDay||dn>totalDays) {
-      cell.className='cal-day empty';
-      grid.appendChild(cell); continue;
-    }
+    const dayGuards=monthData[String(dn)]||[];
+    const maxG=await maxGuardsForDay(y,m,dn);
+    const isFull=dayGuards.length>=maxG;
+    const isToday=y===curY&&m===curM&&dn===now.getDate();
+    const isWknd=[0,6].includes(dayOfWeek(y,m,dn));
 
-    const dayGuards = monthData[String(dn)]||[];
-    const maxG      = await maxGuardsForDay(y,m,dn);
-    const isFull    = dayGuards.length>=maxG;
-    const isToday   = y===curY&&m===curM&&dn===now.getDate();
-    const isWknd    = [0,6].includes(dayOfWeek(y,m,dn));
+    cell.className=['cal-day',isToday?'today':'',isWknd?'weekend':'',isFull?'full-day':''].filter(Boolean).join(' ');
 
-    cell.className = ['cal-day',
-      isToday?'today':'', isWknd?'weekend':'', isFull?'full-day':'',
-    ].filter(Boolean).join(' ');
-
-    const numEl = document.createElement('div');
-    numEl.className='day-num'; numEl.textContent=dn;
+    const numEl=document.createElement('div'); numEl.className='day-num'; numEl.textContent=dn;
     cell.appendChild(numEl);
 
-    if (isFull&&maxG<99) {
-      const badge=document.createElement('span');
-      badge.className='day-full-badge'; badge.textContent='LLENO';
+    if(isFull&&maxG<99){
+      const badge=document.createElement('span'); badge.className='day-full-badge'; badge.textContent='LLENO';
       cell.appendChild(badge);
     }
 
-    dayGuards.forEach((g,idx) => {
-      const wrap=document.createElement('div');
-      wrap.className='guard-chip-wrap';
-
+    dayGuards.forEach((g,idx)=>{
+      const wrap=document.createElement('div'); wrap.className='guard-chip-wrap';
       const chip=document.createElement('span');
       chip.className=`guard-chip ${isApproved?'approved':'pending'}`;
-      chip.textContent=`${g.name} (${g.level})`;
-      chip.title=`${g.name} · ${g.level}`;
+      chip.textContent=`${g.name} (${g.level})`; chip.title=`${g.name} · ${g.level}`;
       wrap.appendChild(chip);
 
-      if (isAdm) {
+      if(isAdm){
         chip.draggable=true;
-        chip.addEventListener('dragstart', e=>{
-          STATE.drag={ name:g.name, level:g.level, fromKey:key, fromDay:dn, fromIdx:idx };
+        chip.addEventListener('dragstart',e=>{
+          STATE.drag={name:g.name,level:g.level,fromKey:key,fromDay:dn,fromIdx:idx};
           chip.classList.add('dragging');
           const ghost=document.getElementById('drag-ghost');
-          ghost.textContent=`${g.name} (${g.level})`;
-          ghost.classList.remove('hidden');
+          ghost.textContent=`${g.name} (${g.level})`; ghost.classList.remove('hidden');
           e.dataTransfer.effectAllowed='move';
         });
-        chip.addEventListener('dragend', ()=>{
+        chip.addEventListener('dragend',()=>{
           chip.classList.remove('dragging');
           document.getElementById('drag-ghost').classList.add('hidden');
           STATE.drag=null;
@@ -666,13 +660,14 @@ async function renderCalendar() {
         });
       }
 
-      const canDelete = isAdm||(isUser&&g.name===session.name);
-      if (canDelete) {
+      // X: admin/dev siempre; usuario normal SOLO sus propias guardias
+      const canDelete=isAdm||(isUser&&g.name===session.name);
+      if(canDelete){
         const xBtn=document.createElement('button');
         xBtn.className='chip-delete-btn'; xBtn.title='Eliminar'; xBtn.innerHTML='✕';
-        xBtn.addEventListener('click', e=>{
+        xBtn.addEventListener('click',e=>{
           e.stopPropagation();
-          if (isUser&&!confirm(`¿Eliminar tu guardia del día ${dn}?`)) return;
+          if(isUser&&!confirm(`¿Eliminar tu guardia del día ${dn}?`)) return;
           deleteGuard(key,dn,idx);
         });
         wrap.appendChild(xBtn);
@@ -680,214 +675,141 @@ async function renderCalendar() {
       cell.appendChild(wrap);
     });
 
-    if (isAdm) {
-      cell.addEventListener('dragover', e=>{ e.preventDefault(); if(STATE.drag) cell.classList.add('drag-over'); });
-      cell.addEventListener('dragleave', ()=>cell.classList.remove('drag-over'));
-      cell.addEventListener('drop', e=>{ e.preventDefault(); cell.classList.remove('drag-over'); if(STATE.drag) dropGuard(dn,key); });
-
-      if (!isFull||maxG>=99) {
+    if(isAdm){
+      cell.addEventListener('dragover',e=>{ e.preventDefault(); if(STATE.drag) cell.classList.add('drag-over'); });
+      cell.addEventListener('dragleave',()=>cell.classList.remove('drag-over'));
+      cell.addEventListener('drop',e=>{ e.preventDefault(); cell.classList.remove('drag-over'); if(STATE.drag) dropGuard(dn,key); });
+      if(!isFull||maxG>=99){
         const addBtn=document.createElement('button');
         addBtn.className='day-add-btn'; addBtn.title='Añadir guardia'; addBtn.innerHTML='＋';
-        addBtn.addEventListener('click', e=>{ e.stopPropagation(); openAddModal(dn,key,maxG); });
+        addBtn.addEventListener('click',e=>{ e.stopPropagation(); openAddModal(dn,key,maxG); });
         cell.appendChild(addBtn);
       }
     }
     grid.appendChild(cell);
   }
 
-  document.onmousemove = e=>{
+  document.onmousemove=e=>{
     const ghost=document.getElementById('drag-ghost');
-    if (!ghost.classList.contains('hidden')) {
-      ghost.style.left=e.clientX+'px';
-      ghost.style.top=(e.clientY-20)+'px';
-    }
+    if(!ghost.classList.contains('hidden')){ ghost.style.left=e.clientX+'px'; ghost.style.top=(e.clientY-20)+'px'; }
   };
 
   document.getElementById('pdf-section').classList.toggle('hidden',!(isApproved&&isAdm));
-  if (isAdm) {
-    document.getElementById('admin-status').textContent =
-      isApproved ? '✅ Mes aprobado' : '📋 Mes pendiente';
-  }
+  if(isAdm) document.getElementById('admin-status').textContent=isApproved?'✅ Mes aprobado':'📋 Mes pendiente';
 }
 
-async function cleanOldMonths(curY, curM) {
-  const g=await loadGuardias(), a=await loadApproved(); let ch=false;
+async function cleanOldMonths(curY,curM) {
+  const g=await loadGuardias(),a=await loadApproved(); let ch=false;
   [...Object.keys(g),...Object.keys(a)].forEach(k=>{
     const [y,mo]=k.split('-').map(Number);
-    if (y<curY||(y===curY&&mo-1<curM)) { delete g[k]; delete a[k]; ch=true; }
+    if(y<curY||(y===curY&&mo-1<curM)){ delete g[k]; delete a[k]; ch=true; }
   });
-  if (ch) { await saveGuardias(g); await saveApproved(a); }
+  if(ch){ await saveGuardias(g); await saveApproved(a); }
 }
 
 // ============================================================
 // DRAG & DROP
 // ============================================================
-async function dropGuard(toDay, toKey) {
+async function dropGuard(toDay,toKey) {
   const drag=STATE.drag; if(!drag) return;
-  const { fromKey,fromDay,fromIdx,name,level }=drag;
-  if (fromKey===toKey&&fromDay===toDay) return;
-
+  const {fromKey,fromDay,fromIdx,name,level}=drag;
+  if(fromKey===toKey&&fromDay===toDay) return;
   const guardias=await loadGuardias();
-  const src=(guardias[fromKey]||{})[String(fromDay)];
-  if (!src) return;
-
-  src.splice(fromIdx,1);
-  if (!src.length) delete guardias[fromKey][String(fromDay)];
-
-  if (!guardias[toKey]) guardias[toKey]={};
-  if (!guardias[toKey][String(toDay)]) guardias[toKey][String(toDay)]=[];
+  const src=(guardias[fromKey]||{})[String(fromDay)]; if(!src) return;
+  src.splice(fromIdx,1); if(!src.length) delete guardias[fromKey][String(fromDay)];
+  if(!guardias[toKey]) guardias[toKey]={};
+  if(!guardias[toKey][String(toDay)]) guardias[toKey][String(toDay)]=[];
   const dest=guardias[toKey][String(toDay)];
   const maxG=await maxGuardsForDay(STATE.viewYear,STATE.viewMonth,toDay);
-
   const revert=async()=>{
-    if (!guardias[fromKey]) guardias[fromKey]={};
-    if (!guardias[fromKey][String(fromDay)]) guardias[fromKey][String(fromDay)]=[];
+    if(!guardias[fromKey]) guardias[fromKey]={};
+    if(!guardias[fromKey][String(fromDay)]) guardias[fromKey][String(fromDay)]=[];
     guardias[fromKey][String(fromDay)].splice(fromIdx,0,{name,level});
     await saveGuardias(guardias);
   };
-
-  if (dest.length>=maxG) { alert(`Día ${toDay} completo (máx ${maxG}).`); await revert(); return; }
-  if (dest.some(g=>g.name===name)) { alert(`${name} ya tiene guardia el día ${toDay}.`); await revert(); return; }
-
-  dest.push({name,level});
-  await saveGuardias(guardias);
-  STATE.drag=null;
-  renderCalendar();
+  if(dest.length>=maxG){ alert(`Día ${toDay} completo (máx ${maxG}).`); await revert(); return; }
+  if(dest.some(g=>g.name===name)){ alert(`${name} ya tiene guardia el día ${toDay}.`); await revert(); return; }
+  dest.push({name,level}); await saveGuardias(guardias); STATE.drag=null; renderCalendar();
 }
 
-// ============================================================
-// ELIMINAR GUARDIA
-// ============================================================
-async function deleteGuard(key, day, idx) {
-  const g=await loadGuardias();
-  if (!g[key]?.[String(day)]) return;
-  g[key][String(day)].splice(idx,1);
-  if (!g[key][String(day)].length) delete g[key][String(day)];
-  await saveGuardias(g);
-  renderCalendar();
+async function deleteGuard(key,day,idx) {
+  const g=await loadGuardias(); if(!g[key]?.[String(day)]) return;
+  g[key][String(day)].splice(idx,1); if(!g[key][String(day)].length) delete g[key][String(day)];
+  await saveGuardias(g); renderCalendar();
 }
 
 // ============================================================
 // MODAL AÑADIR GUARDIA
 // ============================================================
-async function openAddModal(day, key, maxG) {
-  const guardias  = await loadGuardias();
-  const dayGuards = (guardias[key]||{})[String(day)]||[];
-
+async function openAddModal(day,key,maxG) {
+  const guardias=await loadGuardias(); const dayGuards=(guardias[key]||{})[String(day)]||[];
   STATE.addModalDay=day; STATE.addModalKey=key;
-
-  const dateStr=new Date(STATE.viewYear,STATE.viewMonth,day)
-    .toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
+  const dateStr=new Date(STATE.viewYear,STATE.viewMonth,day).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('add-modal-title').textContent=`Añadir guardia — ${dateStr}`;
   document.getElementById('add-modal-warning').textContent='';
-
   const sel=document.getElementById('add-modal-user');
   sel.innerHTML='<option value="">— Selecciona usuario —</option>';
-  const users=await loadUsers();
-  const inDay=new Set(dayGuards.map(g=>g.name));
-
-  if (dayGuards.length>=maxG) {
-    sel.innerHTML=`<option value="">Día completo (máx ${maxG})</option>`;
-    sel.disabled=true;
-  } else {
+  const users=await loadUsers(); const inDay=new Set(dayGuards.map(g=>g.name));
+  if(dayGuards.length>=maxG){ sel.innerHTML=`<option value="">Día completo (máx ${maxG})</option>`; sel.disabled=true; }
+  else {
     sel.disabled=false;
     users.filter(u=>!inDay.has(u.name)).forEach(u=>{
-      const opt=document.createElement('option');
-      opt.value=u.name;
-      opt.textContent=`${u.name} (${u.level||'-'}) · ${u.rol}`;
-      opt.dataset.level=u.level||'R4';
+      const opt=document.createElement('option'); opt.value=u.name;
+      opt.textContent=`${u.name} (${u.level||'-'}) · ${u.rol}`; opt.dataset.level=u.level||'R4';
       sel.appendChild(opt);
     });
   }
   document.getElementById('add-modal').classList.remove('hidden');
 }
-
-function closeAddModal() {
-  document.getElementById('add-modal').classList.add('hidden');
-  STATE.addModalDay=null; STATE.addModalKey=null;
-}
-
+function closeAddModal(){ document.getElementById('add-modal').classList.add('hidden'); STATE.addModalDay=null; STATE.addModalKey=null; }
 async function confirmAddModal() {
-  const { addModalDay:day, addModalKey:key }=STATE;
-  if (!day||!key) return;
-  const sel=document.getElementById('add-modal-user');
-  const name=sel.value;
-  const warnEl=document.getElementById('add-modal-warning');
-  warnEl.textContent='';
-  if (!name) { warnEl.textContent='Selecciona un usuario.'; return; }
+  const {addModalDay:day,addModalKey:key}=STATE; if(!day||!key) return;
+  const sel=document.getElementById('add-modal-user'); const name=sel.value;
+  const warnEl=document.getElementById('add-modal-warning'); warnEl.textContent='';
+  if(!name){ warnEl.textContent='Selecciona un usuario.'; return; }
   const level=sel.selectedOptions[0]?.dataset.level||'R4';
   const guardias=await loadGuardias();
-  if (!guardias[key]) guardias[key]={};
-  if (!guardias[key][String(day)]) guardias[key][String(day)]=[];
-  const existing=guardias[key][String(day)];
-  const maxG=await maxGuardsForDay(STATE.viewYear,STATE.viewMonth,day);
-  if (existing.length>=maxG) { warnEl.textContent='Día completo.'; return; }
-  if (existing.some(g=>g.name===name)) { warnEl.textContent='Ese usuario ya tiene guardia ese día.'; return; }
-  existing.push({name,level});
-  await saveGuardias(guardias);
-  closeAddModal(); renderCalendar();
+  if(!guardias[key]) guardias[key]={}; if(!guardias[key][String(day)]) guardias[key][String(day)]=[];
+  const existing=guardias[key][String(day)]; const maxG=await maxGuardsForDay(STATE.viewYear,STATE.viewMonth,day);
+  if(existing.length>=maxG){ warnEl.textContent='Día completo.'; return; }
+  if(existing.some(g=>g.name===name)){ warnEl.textContent='Ese usuario ya tiene guardia ese día.'; return; }
+  existing.push({name,level}); await saveGuardias(guardias); closeAddModal(); renderCalendar();
 }
 
 // ============================================================
 // PROPONER GUARDIA
 // ============================================================
 async function submitProposal() {
-  const { session, viewYear:y, viewMonth:m }=STATE;
-  const now=today();
-  const curY=now.getFullYear(), curM=now.getMonth(), curD=now.getDate();
+  const {session,viewYear:y,viewMonth:m}=STATE;
+  const now=today(); const curY=now.getFullYear(),curM=now.getMonth(),curD=now.getDate();
   const s=await loadSettings();
-
-  if (!(await canPropose(session.level))) return;
-
+  if(!(await canPropose(session.level))) return;
   const isNextMonth=(y>curY)||(y===curY&&m>curM);
-  if (isNextMonth&&s.deadlineOn&&curD>15) {
-    alert('Plazo cerrado: propuestas del mes siguiente hasta el día 15 a las 00:00.'); return;
-  }
-
+  if(isNextMonth&&s.deadlineOn&&curD>15){ alert('Plazo cerrado: propuestas del mes siguiente hasta el día 15 a las 00:00.'); return; }
   const count=parseInt(document.getElementById('prop-count').value,10);
-  if (isNaN(count)||count<1||count>5) {
-    document.getElementById('prop-days-warning').textContent='Nº de guardias entre 1 y 5.'; return;
-  }
-
+  if(isNaN(count)||count<1||count>5){ document.getElementById('prop-days-warning').textContent='Nº de guardias entre 1 y 5.'; return; }
   const raw=document.getElementById('prop-days').value;
-  if (!raw.trim()) { document.getElementById('prop-days-warning').textContent='Introduce los días.'; return; }
-
-  const { valid,errors }=parseDaysInput(raw,y,m);
-  if (errors.length) { document.getElementById('prop-days-warning').textContent=errors.join(' | '); return; }
-  if (!valid.length) { document.getElementById('prop-days-warning').textContent='Sin días válidos.'; return; }
-
+  if(!raw.trim()){ document.getElementById('prop-days-warning').textContent='Introduce los días.'; return; }
+  const {valid,errors}=parseDaysInput(raw,y,m);
+  if(errors.length){ document.getElementById('prop-days-warning').textContent=errors.join(' | '); return; }
+  if(!valid.length){ document.getElementById('prop-days-warning').textContent='Sin días válidos.'; return; }
   const daysToAdd=valid.slice(0,count);
-  const guardias=await loadGuardias();
-  const key=monthKey(y,m);
-  if (!guardias[key]) guardias[key]={};
-
+  const guardias=await loadGuardias(); const key=monthKey(y,m); if(!guardias[key]) guardias[key]={};
   const added=[],skipped=[];
-
-  for (const day of daysToAdd) {
-    if (!guardias[key][String(day)]) guardias[key][String(day)]=[];
-    const existing=guardias[key][String(day)];
-    const maxG=await maxGuardsForDay(y,m,day);
-    if (existing.length>=maxG) { skipped.push(`Día ${day}: completo`); continue; }
-    if (existing.some(g=>g.name===session.name)) { skipped.push(`Día ${day}: ya apuntado`); continue; }
-    const newEntry={name:session.name,level:session.level};
-    const sim=[...existing,newEntry];
-    if (s.levelMix&&maxG<=3&&sim.length===maxG&&!hasRequiredLevelMix(sim)) {
-      skipped.push(`Día ${day}: mezcla de niveles inválida`); continue;
-    }
+  for(const day of daysToAdd){
+    if(!guardias[key][String(day)]) guardias[key][String(day)]=[];
+    const existing=guardias[key][String(day)]; const maxG=await maxGuardsForDay(y,m,day);
+    if(existing.length>=maxG){ skipped.push(`Día ${day}: completo`); continue; }
+    if(existing.some(g=>g.name===session.name)){ skipped.push(`Día ${day}: ya apuntado`); continue; }
+    const newEntry={name:session.name,level:session.level}; const sim=[...existing,newEntry];
+    if(s.levelMix&&maxG<=3&&sim.length===maxG&&!hasRequiredLevelMix(sim)){ skipped.push(`Día ${day}: mezcla de niveles inválida`); continue; }
     existing.push(newEntry); added.push(day);
   }
-
-  await saveGuardias(guardias);
-  renderCalendar();
-
-  let msg='';
-  if (added.length)   msg+=`✅ Añadidas: días ${added.join(', ')}.`;
-  if (skipped.length) msg+=`\n⚠️ Omitidos: ${skipped.join(' | ')}`;
-  if (!msg) msg='No se añadió ninguna guardia.';
-  alert(msg);
-
-  document.getElementById('prop-days').value='';
-  document.getElementById('prop-count').value='';
+  await saveGuardias(guardias); renderCalendar();
+  let msg=''; if(added.length) msg+=`✅ Añadidas: días ${added.join(', ')}.`;
+  if(skipped.length) msg+=`\n⚠️ Omitidos: ${skipped.join(' | ')}`;
+  if(!msg) msg='No se añadió ninguna guardia.'; alert(msg);
+  document.getElementById('prop-days').value=''; document.getElementById('prop-count').value='';
   document.getElementById('prop-days-warning').textContent='';
 }
 
@@ -896,39 +818,24 @@ async function submitProposal() {
 // ============================================================
 async function approveMonth() {
   const key=monthKey(STATE.viewYear,STATE.viewMonth);
-  const approved=await loadApproved();
-  approved[key]=true;
-  await saveApproved(approved);
-  let users=await loadUsers();
-  users=users.filter(u=>u.rol==='admin');
-  await saveUsers(users);
+  const approved=await loadApproved(); approved[key]=true; await saveApproved(approved);
+  let users=await loadUsers(); users=users.filter(u=>u.rol==='admin'); await saveUsers(users);
   renderCalendar(); renderUsersList();
-  if (STATE.session.rol==='dev') renderDevSwitchList();
+  if(STATE.session.rol==='dev') renderDevSwitchList();
   document.getElementById('admin-status').textContent='✅ Mes aprobado. Usuarios reseteados.';
 }
-
 async function resetMonth() {
   const key=monthKey(STATE.viewYear,STATE.viewMonth);
-  const label=new Date(STATE.viewYear,STATE.viewMonth,1)
-    .toLocaleDateString('es-ES',{month:'long',year:'numeric'});
-  if (!confirm(`¿Resetear guardias de ${label}?\nSe hará un backup automático.`)) return;
-  const g=await loadGuardias();
-  await saveBackup(JSON.parse(JSON.stringify(g)));
-  delete g[key];
-  await saveGuardias(g);
-  const a=await loadApproved();
-  delete a[key];
-  await saveApproved(a);
-  renderCalendar();
-  document.getElementById('admin-status').textContent='🗑️ Mes reseteado. Backup guardado.';
+  const label=new Date(STATE.viewYear,STATE.viewMonth,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+  if(!confirm(`¿Resetear guardias de ${label}?\nSe hará un backup automático.`)) return;
+  const g=await loadGuardias(); await saveBackup(JSON.parse(JSON.stringify(g))); delete g[key]; await saveGuardias(g);
+  const a=await loadApproved(); delete a[key]; await saveApproved(a);
+  renderCalendar(); document.getElementById('admin-status').textContent='🗑️ Mes reseteado. Backup guardado.';
 }
-
 async function restoreBackup() {
-  const backup=await loadBackup();
-  if (!backup) { alert('No hay backup disponible.'); return; }
-  if (!confirm('¿Restaurar el mes borrado? Se sobreescribirán las guardias actuales.')) return;
-  await saveGuardias(backup);
-  renderCalendar();
+  const backup=await loadBackup(); if(!backup){ alert('No hay backup disponible.'); return; }
+  if(!confirm('¿Restaurar el mes borrado?')) return;
+  await saveGuardias(backup); renderCalendar();
   document.getElementById('admin-status').textContent='♻️ Mes restaurado.';
 }
 
@@ -936,16 +843,14 @@ async function restoreBackup() {
 // DEV: CREAR USUARIO
 // ============================================================
 async function devCreateUser() {
-  const name  = document.getElementById('dev-new-name').value.trim();
-  const level = document.getElementById('dev-new-level').value;
-  const rol   = document.getElementById('dev-new-rol').value;
-  if (!name) { alert('Introduce un nombre.'); return; }
+  const name=document.getElementById('dev-new-name').value.trim();
+  const level=document.getElementById('dev-new-level').value;
+  const rol=document.getElementById('dev-new-rol').value;
+  if(!name){ alert('Introduce un nombre.'); return; }
   const users=await loadUsers();
-  if (users.some(u=>u.name===name)) { alert('Nombre ya existente.'); return; }
-  const u={name,level,rol};
-  if (rol==='admin') u.pass='admin123';
-  users.push(u);
-  await saveUsers(users);
+  if(users.some(u=>u.name.toLowerCase()===name.toLowerCase())){ alert('Nombre ya existente.'); return; }
+  const u={name,level,rol}; if(rol==='admin') u.pass='admin123';
+  users.push(u); await saveUsers(users);
   document.getElementById('dev-new-name').value='';
   renderDevSwitchList(); renderUsersList();
   alert(`Usuario "${name}" (${level} · ${rol}) creado.${rol==='admin'?' Contraseña: admin123':''}`);
@@ -954,7 +859,7 @@ async function devCreateUser() {
 // ============================================================
 // INIT
 // ============================================================
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', async ()=>{
   await ensureDefaultAdmin();
   setupLogin();
 });
