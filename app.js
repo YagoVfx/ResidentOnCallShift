@@ -99,14 +99,17 @@ async function saveApproved(data) {
   await dbSet('approved', data);
 }
 
-// --- Settings ---
-function loadSettings() {
-  // Settings se mantienen en localStorage (son por dispositivo/DEV)
-  try { return Object.assign({}, defaultSettings(), JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); }
-  catch { return defaultSettings(); }
+// --- Settings (Firestore — afecta a todos los dispositivos) ---
+async function loadSettings() {
+  try {
+    const d = await dbGet('settings');
+    return Object.assign({}, defaultSettings(), d || {});
+  } catch {
+    return defaultSettings();
+  }
 }
-function saveSettings(s) {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+async function saveSettings(s) {
+  await dbSet('settings', s);
 }
 
 // --- Welcome visto ---
