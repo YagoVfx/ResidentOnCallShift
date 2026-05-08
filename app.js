@@ -863,3 +863,13 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await ensureDefaultAdmin();
   setupLogin();
 });
+
+// ============================================================
+// EXPONER FUNCIONES AL SCOPE GLOBAL
+// Necesario porque el script carga como "module" (ES modules
+// tienen scope propio — los onclick del HTML no las ven sin esto)
+// ============================================================
+window.devLoginAs        = devLoginAs;
+window.devDelFromLogin   = devDelFromLogin;
+window.devSwitchInApp    = devSwitchInApp;
+window.devDelInApp       = devDelInApp;
