@@ -174,95 +174,86 @@ function setupLogin() {
   const passGrp  = document.getElementById('login-admin-pass-group');
   const passEl   = document.getElementById('login-pass');
 
-  // Al escribir nombre: detectar si es admin conocido → mostrar pass
-  // También detectar si es "dev" (sin revelar nada en UI, solo mostrar pass)
   nameEl.addEventListener('input', async () => {
-    const name = nameEl.value.trim().toLowerCase();
-    const users = await loadUsers();
+    const nameLow = nameEl.value.trim().toLowerCase();
     const pinHint = document.getElementById('login-pin-hint');
     const devTab  = document.getElementById('tab-dev');
 
-    // Ocultar todo por defecto y recalcular
-    passGrp.classList.add('hidden');
+    // Reset UI
     levelGrp.classList.remove('hidden');
+    passGrp.classList.add('hidden');
     if (pinHint) pinHint.textContent = '';
     devTab.classList.add('tab-dev-hidden');
     devTab.classList.remove('dev-visible');
 
-    if (!name) return;
+    if (!nameLow) return;
 
-    // DEV: nombre especial → mostrar pass + panel DEV
-    if (name === 'dev') {
-      passGrp.classList.remove('hidden');
+    // DEV
+    if (nameLow === 'dev') {
       levelGrp.classList.add('hidden');
-      if (pinHint) pinHint.textContent = 'Introduce tu clave de acceso.';
+      passGrp.classList.remove('hidden');
       devTab.classList.remove('tab-dev-hidden');
       devTab.classList.add('dev-visible');
       renderDevLoginList();
       return;
     }
 
-    // Admin conocido → mostrar pass, ocultar nivel
-    const isAdmin = users.some(u => u.name.toLowerCase() === name && u.rol === 'admin');
-    if (isAdmin) {
-      passGrp.classList.remove('hidden');
+    const users = await loadUsers();
+
+    // Admin
+    if (users.some(u => u.name.toLowerCase()===nameLow && u.rol==='admin')) {
       levelGrp.classList.add('hidden');
-      if (pinHint) pinHint.textContent = 'Introduce tu contraseña de administrador.';
+      passGrp.classList.remove('hidden');
+      if (pinHint) pinHint.textContent = 'Administrador — introduce tu contraseña.';
       return;
     }
 
-    // Usuario normal ya registrado
-    const matched = users.find(u => u.name.toLowerCase() === name && u.rol === 'user');
+    // Usuario registrado — nivel siempre visible, prellenar si existe
+    const matched = users.find(u => u.name.toLowerCase()===nameLow && u.rol==='user');
     if (matched) {
-      if (hasPinSet(matched.name)) {
-        // Tiene PIN → solo mostrar campo PIN, nivel ya guardado (no hace falta)
-        passGrp.classList.remove('hidden');
-        levelGrp.classList.add('hidden');
-        if (pinHint) pinHint.textContent = 'Introduce tu PIN para verificar tu identidad.';
-      } else {
-        // Registrado sin PIN → mostrar nivel (ya guardado) y campo PIN opcional
-        passGrp.classList.remove('hidden');
-        levelGrp.classList.add('hidden'); // nivel ya guardado en Firestore
-        if (pinHint) pinHint.textContent = 'Puedes crear un PIN opcional para proteger tu cuenta.';
+      levelGrp.classList.remove('hidden');
+      const sel = document.getElementById('login-level');
+      if (matched.level && sel) sel.value = matched.level;
+      passGrp.classList.remove('hidden');
+      if (pinHint) {
+        pinHint.textContent = hasPinSet(matched.name)
+          ? '🔒 Introduce tu PIN personal.'
+          : '🔓 Sin PIN. Puedes crear uno ahora o dejar vacío para entrar.';
       }
       return;
     }
 
-    // Nombre nuevo → mostrar nivel + PIN opcional
-    passGrp.classList.remove('hidden');
+    // Nuevo usuario
     levelGrp.classList.remove('hidden');
-    if (pinHint) pinHint.textContent = 'Nuevo usuario. Elige tu nivel y un PIN opcional.';
+    passGrp.classList.remove('hidden');
+    if (pinHint) pinHint.textContent = '👋 Nuevo usuario. Elige tu nivel y un PIN opcional.';
   });
 
   document.getElementById('btn-login-user').addEventListener('click', doLogin);
-  nameEl.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
-  passEl.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  nameEl.addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+  passEl.addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
 
   document.getElementById('btn-dev-quick-create').addEventListener('click', devQuickCreate);
-
-  // DEV fake day login
   document.getElementById('btn-dev-apply-date').addEventListener('click', applyFakeDateLogin);
   document.getElementById('btn-dev-reset-date').addEventListener('click', resetFakeDateLogin);
 }
 
 function applyFakeDateLogin() {
-  const dv=parseInt(document.getElementById('dev-fake-day').value,10)||null;
-  const mv=document.getElementById('dev-fake-month')?.value;
-  const yv=parseInt(document.getElementById('dev-fake-year')?.value,10)||null;
-  const st=document.getElementById('dev-fake-day-status');
-  const now=new Date();
-  STATE.fakeDay   = (dv>=1&&dv<=31)?dv:null;
-  STATE.fakeMonth = (mv!==''&&mv!==undefined&&mv!==null)?parseInt(mv,10):null;
+  const dv = parseInt(document.getElementById('dev-fake-day').value,10)||null;
+  const mv = document.getElementById('dev-fake-month')?.value;
+  const yv = parseInt(document.getElementById('dev-fake-year')?.value,10)||null;
+  const st = document.getElementById('dev-fake-day-status');
+  STATE.fakeDay   = (dv>=1&&dv<=31) ? dv : null;
+  STATE.fakeMonth = (mv!==''&&mv!=null) ? parseInt(mv,10) : null;
   STATE.fakeYear  = yv||null;
-  if (STATE.fakeDay||STATE.fakeMonth!==null||STATE.fakeYear) {
-    const td=today();
-    st.textContent=`✅ Simulando: ${td.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}`;
+  if (STATE.fakeDay!==null||STATE.fakeMonth!==null||STATE.fakeYear!==null) {
+    st.textContent = `✅ Simulando: ${today().toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}`;
   } else { st.textContent='Sin simulación activa.'; }
 }
 function resetFakeDateLogin() {
   STATE.fakeDay=null; STATE.fakeMonth=null; STATE.fakeYear=null;
   const d=document.getElementById('dev-fake-day');   if(d) d.value='';
-  const mo=document.getElementById('dev-fake-month'); if(mo) mo.value='';
+  const m=document.getElementById('dev-fake-month'); if(m) m.value='';
   const y=document.getElementById('dev-fake-year');  if(y) y.value='';
   document.getElementById('dev-fake-day-status').textContent='Usando fecha real.';
 }
@@ -271,16 +262,17 @@ async function doLogin() {
   const nameRaw = document.getElementById('login-name').value.trim();
   const level   = document.getElementById('login-level').value;
   const pass    = document.getElementById('login-pass').value;
+
   if (!nameRaw) { showLoginError('Introduce tu nombre.'); return; }
 
   // DEV
   if (nameRaw.toLowerCase()==='dev') {
     if (pass!==DEV_PASSWORD) { showLoginError('Credenciales incorrectas.'); return; }
-    startSession({name:'DEV',level:'R4',rol:'dev'});
+    startSession({name:'DEV', level:'R4', rol:'dev'});
     return;
   }
 
-  const users = await loadUsers();
+  const users   = await loadUsers();
   const matched = users.find(u => u.name.toLowerCase()===nameRaw.toLowerCase());
 
   // Admin
@@ -290,34 +282,32 @@ async function doLogin() {
     return;
   }
 
-  // Usuario ya registrado en Firestore
+  // Usuario registrado
   if (matched && matched.rol==='user') {
+    // Nivel: usar el del formulario si lo seleccionó, si no el guardado
+    const finalLevel = level || matched.level || 'R4';
+
     if (hasPinSet(matched.name)) {
-      // Tiene PIN configurado → verificarlo
-      if (!pass) { showLoginError('Introduce tu PIN personal.'); return; }
+      if (!pass) { showLoginError('Este usuario tiene PIN. Introdúcelo para entrar.'); return; }
       if (getPinForUser(matched.name)!==pass) { showLoginError('PIN incorrecto.'); return; }
     } else {
-      // Sin PIN → si escribe uno ahora, guardarlo para futuras sesiones
+      // Sin PIN: si escribe uno ahora, guardarlo
       if (pass) { setPinForUser(matched.name, pass); }
     }
-    // Usar el nivel guardado en Firestore (no el selector, que puede estar oculto)
-    startSession({name:matched.name, level:matched.level||'R4', rol:'user'});
+
+    // Actualizar nivel en Firestore si cambió
+    if (level && level!==matched.level) {
+      matched.level = level;
+      await saveUsers(users);
+    }
+
+    startSession({name:matched.name, level:finalLevel, rol:'user'});
     return;
   }
 
-  // Nombre completamente nuevo → necesita nivel
+  // Usuario nuevo
   if (!level) { showLoginError('Selecciona tu nivel MIR.'); return; }
-
-  // Comprobar que no existe ya con otro capitalization
-  if (users.some(u => u.name.toLowerCase()===nameRaw.toLowerCase())) {
-    showLoginError('Ese nombre ya está registrado. Escríbelo exactamente igual que la primera vez.');
-    return;
-  }
-
-  // Guardar PIN si lo puso
   if (pass) { setPinForUser(nameRaw, pass); }
-
-  // Registrar nuevo usuario
   users.push({name:nameRaw, level, rol:'user'});
   await saveUsers(users);
   startSession({name:nameRaw, level, rol:'user'});
