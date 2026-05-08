@@ -177,37 +177,61 @@ function setupLogin() {
   // Al escribir nombre: detectar si es admin conocido → mostrar pass
   // También detectar si es "dev" (sin revelar nada en UI, solo mostrar pass)
   nameEl.addEventListener('input', async () => {
-    const name=nameEl.value.trim().toLowerCase();
-    const users=await loadUsers();
-    const isAdmin=users.some(u=>u.name.toLowerCase()===name&&u.rol==='admin');
-    const isDev=(name==='dev');
-    const showPass=isAdmin||isDev;
-    passGrp.classList.toggle('hidden',!showPass);
-    levelGrp.classList.toggle('hidden',showPass);
+    const name = nameEl.value.trim().toLowerCase();
+    const users = await loadUsers();
+    const pinHint = document.getElementById('login-pin-hint');
+    const devTab  = document.getElementById('tab-dev');
 
-    // Show DEV panel when name is "dev"
-    const devTab=document.getElementById('tab-dev');
-    if (isDev) {
-      devTab.classList.remove('tab-dev-hidden'); devTab.classList.add('dev-visible');
+    // Ocultar todo por defecto y recalcular
+    passGrp.classList.add('hidden');
+    levelGrp.classList.remove('hidden');
+    if (pinHint) pinHint.textContent = '';
+    devTab.classList.add('tab-dev-hidden');
+    devTab.classList.remove('dev-visible');
+
+    if (!name) return;
+
+    // DEV: nombre especial → mostrar pass + panel DEV
+    if (name === 'dev') {
+      passGrp.classList.remove('hidden');
+      levelGrp.classList.add('hidden');
+      if (pinHint) pinHint.textContent = 'Introduce tu clave de acceso.';
+      devTab.classList.remove('tab-dev-hidden');
+      devTab.classList.add('dev-visible');
       renderDevLoginList();
-    } else {
-      devTab.classList.add('tab-dev-hidden'); devTab.classList.remove('dev-visible');
+      return;
     }
 
-    // PIN hint for registered users
-    const pinHint=document.getElementById('login-pin-hint');
-    if (pinHint) {
-      const matched=users.find(u=>u.name.toLowerCase()===name&&u.rol==='user');
-      if (matched) {
-        if (hasPinSet(matched.name)) {
-          pinHint.textContent='Este usuario tiene PIN configurado.';
-          passGrp.classList.remove('hidden'); levelGrp.classList.add('hidden');
-        } else {
-          pinHint.textContent='Primera vez: puedes crear un PIN opcional.';
-          passGrp.classList.remove('hidden');
-        }
-      } else { pinHint.textContent=''; }
+    // Admin conocido → mostrar pass, ocultar nivel
+    const isAdmin = users.some(u => u.name.toLowerCase() === name && u.rol === 'admin');
+    if (isAdmin) {
+      passGrp.classList.remove('hidden');
+      levelGrp.classList.add('hidden');
+      if (pinHint) pinHint.textContent = 'Introduce tu contraseña de administrador.';
+      return;
     }
+
+    // Usuario normal ya registrado
+    const matched = users.find(u => u.name.toLowerCase() === name && u.rol === 'user');
+    if (matched) {
+      if (hasPinSet(matched.name)) {
+        // Tiene PIN → solo mostrar campo PIN, nivel ya guardado (no hace falta)
+        passGrp.classList.remove('hidden');
+        levelGrp.classList.add('hidden');
+        if (pinHint) pinHint.textContent = 'Introduce tu PIN para verificar tu identidad.';
+      } else {
+        // Registrado sin PIN → mostrar nivel (ya guardado) y campo PIN opcional
+        passGrp.classList.remove('hidden');
+        levelGrp.classList.add('hidden'); // nivel ya guardado en Firestore
+        if (pinHint) pinHint.textContent = 'Puedes crear un PIN opcional para proteger tu cuenta.';
+      }
+      return;
+    }
+
+    // Nombre nuevo → mostrar nivel + PIN opcional
+    passGrp.classList.remove('hidden');
+    levelGrp.classList.remove('hidden');
+    if (pinHint) pinHint.textContent = 'Nuevo usuario. Elige tu nivel y un PIN opcional.';
   });
 
   document.getElementById('btn-login-user').addEventListener('click', doLogin);
@@ -249,49 +273,51 @@ async function doLogin() {
   const pass    = document.getElementById('login-pass').value;
   if (!nameRaw) { showLoginError('Introduce tu nombre.'); return; }
 
-  // DEV login (nombre "dev", contraseña dev123) — sin pistas en UI
+  // DEV
   if (nameRaw.toLowerCase()==='dev') {
     if (pass!==DEV_PASSWORD) { showLoginError('Credenciales incorrectas.'); return; }
     startSession({name:'DEV',level:'R4',rol:'dev'});
     return;
   }
 
-  const users=await loadUsers();
-  // Buscar nombre exacto (case-insensitive)
-  const matched=users.find(u=>u.name.toLowerCase()===nameRaw.toLowerCase());
+  const users = await loadUsers();
+  const matched = users.find(u => u.name.toLowerCase()===nameRaw.toLowerCase());
 
+  // Admin
   if (matched && matched.rol==='admin') {
     if (matched.pass && matched.pass!==pass) { showLoginError('Contraseña incorrecta.'); return; }
-    startSession({name:matched.name,level:matched.level||'R4',rol:'admin'});
+    startSession({name:matched.name, level:matched.level||'R4', rol:'admin'});
     return;
   }
 
-  // Usuario normal
-  if (!level) { showLoginError('Selecciona tu nivel MIR.'); return; }
-
-  // Si el nombre ya existe como usuario registrado, verificar nivel coincide
+  // Usuario ya registrado en Firestore
   if (matched && matched.rol==='user') {
-    // Nombre registrado: verificar PIN si ya lo tiene
     if (hasPinSet(matched.name)) {
+      // Tiene PIN configurado → verificarlo
       if (!pass) { showLoginError('Introduce tu PIN personal.'); return; }
       if (getPinForUser(matched.name)!==pass) { showLoginError('PIN incorrecto.'); return; }
     } else {
-      // Primera vez: si escribió contraseña, la usamos como PIN
+      // Sin PIN → si escribe uno ahora, guardarlo para futuras sesiones
       if (pass) { setPinForUser(matched.name, pass); }
     }
-    startSession({name:matched.name, level:matched.level||level, rol:'user'});
+    // Usar el nivel guardado en Firestore (no el selector, que puede estar oculto)
+    startSession({name:matched.name, level:matched.level||'R4', rol:'user'});
     return;
   }
 
-  // Nombre nuevo: comprobar que no existe ya (sin importar capitalización)
-  if (users.some(u=>u.name.toLowerCase()===nameRaw.toLowerCase())) {
-    showLoginError('Ese nombre ya está registrado. Usa exactamente el mismo nombre que la primera vez.');
+  // Nombre completamente nuevo → necesita nivel
+  if (!level) { showLoginError('Selecciona tu nivel MIR.'); return; }
+
+  // Comprobar que no existe ya con otro capitalization
+  if (users.some(u => u.name.toLowerCase()===nameRaw.toLowerCase())) {
+    showLoginError('Ese nombre ya está registrado. Escríbelo exactamente igual que la primera vez.');
     return;
   }
+
+  // Guardar PIN si lo puso
+  if (pass) { setPinForUser(nameRaw, pass); }
 
   // Registrar nuevo usuario
-  // Si escribió contraseña en el campo pass, guardarla como PIN
-  if (pass) { setPinForUser(nameRaw, pass); }
   users.push({name:nameRaw, level, rol:'user'});
   await saveUsers(users);
   startSession({name:nameRaw, level, rol:'user'});
