@@ -18,6 +18,14 @@ const STATE = {
 };
 
 const SETTINGS_KEY  = 'mir_settings';
+
+// Cache de usuarios y settings para evitar llamadas Firestore en cada tecla
+let _usersCache    = null;
+let _settingsCache = null;
+
+// Invalidar cache cuando se guardan datos
+const _origSaveUsers = async (u) => { _usersCache = u; await dbSet('users', u); };
+const _origSaveSettings = async (s) => { _settingsCache = s; await dbSet('settings', s); };
 const SHOWN_WELCOME = 'mir_shown_welcome';
 const DEV_PASSWORD  = 'dev123';   // contraseña DEV — no mostrar en UI
 
@@ -51,11 +59,19 @@ async function loadGuardias()  { return (await dbGet('guardias'))  || {}; }
 async function saveGuardias(d) { await dbSet('guardias',d); }
 async function loadBackup()    { return await dbGet('guardias_backup'); }
 async function saveBackup(d)   { await dbSet('guardias_backup',d); }
-async function loadUsers()     { return (await dbGet('users'))     || []; }
+async function loadUsers()     {
+  if (_usersCache !== null) return _usersCache;
+  _usersCache = (await dbGet('users')) || [];
+  return _usersCache;
+}
 async function saveUsers(u)    { await dbSet('users',u); }
 async function loadApproved()  { return (await dbGet('approved'))  || {}; }
 async function saveApproved(d) { await dbSet('approved',d); }
-async function loadSettings()  { return Object.assign({},defaultSettings(),(await dbGet('settings'))||{}); }
+async function loadSettings()  {
+  if (_settingsCache !== null) return _settingsCache;
+  _settingsCache = Object.assign({}, defaultSettings(), (await dbGet('settings')) || {});
+  return _settingsCache;
+}
 async function saveSettings(s) { await dbSet('settings',s); }
 
 // Bienvenida y PIN: locales por dispositivo
@@ -177,24 +193,18 @@ function setupLogin() {
   nameEl.addEventListener('input', async () => {
     const nameLow = nameEl.value.trim().toLowerCase();
     const pinHint = document.getElementById('login-pin-hint');
-    const devTab  = document.getElementById('tab-dev');
 
     // Reset UI
     levelGrp.classList.remove('hidden');
     passGrp.classList.add('hidden');
     if (pinHint) pinHint.textContent = '';
-    devTab.classList.add('tab-dev-hidden');
-    devTab.classList.remove('dev-visible');
 
     if (!nameLow) return;
 
-    // DEV
+    // DEV — solo mostrar campo contraseña, nunca el panel DEV en login
     if (nameLow === 'dev') {
       levelGrp.classList.add('hidden');
       passGrp.classList.remove('hidden');
-      devTab.classList.remove('tab-dev-hidden');
-      devTab.classList.add('dev-visible');
-      renderDevLoginList();
       return;
     }
 
@@ -619,7 +629,7 @@ async function renderCalendar() {
 
   const firstDay=firstDayOfMonth(y,m); const totalDays=daysInMonth(y,m);
   const totalCells=Math.ceil((firstDay+totalDays)/7)*7;
-  const grid=document.getElementById('calendar-grid'); grid.innerHTML='';
+  const grid=document.getElementById('calendar-grid');
 
   // Panel debug DEV: muestra mes actual simulado vs meses disponibles
   const debugEl=document.getElementById('dev-month-debug');
@@ -635,12 +645,26 @@ async function renderCalendar() {
     } else { debugEl.classList.add('hidden'); }
   }
 
+  // Cargar settings UNA sola vez antes del bucle (evita parpadeo celda a celda)
+  const _settings = await loadSettings();
+  const _getMaxG  = (day) => {
+    const wd = dayOfWeek(y, m, day);
+    if (wd===1 && _settings.limitMon) return 3;
+    if (wd===6 && _settings.limitSat) return 3;
+    if (wd===0 && _settings.limitSun) return 3;
+    if (_settings.limitWeek)          return 2;
+    return 99;
+  };
+
+  // Construir todo el grid en un DocumentFragment (una sola inserción al DOM)
+  const fragment = document.createDocumentFragment();
+
   for(let i=0;i<totalCells;i++){
     const dn=i-firstDay+1; const cell=document.createElement('div');
-    if(i<firstDay||dn>totalDays){ cell.className='cal-day empty'; grid.appendChild(cell); continue; }
+    if(i<firstDay||dn>totalDays){ cell.className='cal-day empty'; fragment.appendChild(cell); continue; }
 
     const dayGuards=monthData[String(dn)]||[];
-    const maxG=await maxGuardsForDay(y,m,dn);
+    const maxG=_getMaxG(dn);
     const isFull=dayGuards.length>=maxG;
     const isToday=y===curY&&m===curM&&dn===now.getDate();
     const isWknd=[0,6].includes(dayOfWeek(y,m,dn));
@@ -705,8 +729,12 @@ async function renderCalendar() {
         cell.appendChild(addBtn);
       }
     }
-    grid.appendChild(cell);
+    fragment.appendChild(cell);
   }
+
+  // Insertar todo el grid de una vez (sin parpadeo)
+  grid.innerHTML = '';
+  grid.appendChild(fragment);
 
   document.onmousemove=e=>{
     const ghost=document.getElementById('drag-ghost');
