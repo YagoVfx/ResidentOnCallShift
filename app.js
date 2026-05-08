@@ -237,9 +237,9 @@ function applyFakeDateLogin() {
 }
 function resetFakeDateLogin() {
   STATE.fakeDay=null; STATE.fakeMonth=null; STATE.fakeYear=null;
-  const d=document.getElementById('dev-fake-day'); if(d) d.value='';
-  const m=document.getElementById('dev-fake-month'); if(m) m.value='';
-  const y=document.getElementById('dev-fake-year'); if(y) y.value='';
+  const d=document.getElementById('dev-fake-day');   if(d) d.value='';
+  const mo=document.getElementById('dev-fake-month'); if(mo) mo.value='';
+  const y=document.getElementById('dev-fake-year');  if(y) y.value='';
   document.getElementById('dev-fake-day-status').textContent='Usando fecha real.';
 }
 
@@ -540,8 +540,13 @@ function resetFakeDateApp() {
   document.getElementById('dev-fake-month-app').value='';
   document.getElementById('dev-fake-year-app').value='';
   document.getElementById('dev-fake-day-status-app').textContent='Fecha real restaurada.';
-  const now=new Date(); STATE.viewYear=now.getFullYear(); STATE.viewMonth=now.getMonth();
-  updateFormState(); renderCalendar();
+  // Volver a la vista del mes real actual sin borrar nada
+  const now=new Date();
+  STATE.viewYear=now.getFullYear();
+  STATE.viewMonth=now.getMonth();
+  // Llamar a renderCalendar directamente (sin cleanOldMonths)
+  updateFormState();
+  renderCalendar();
 }
 
 function navPrev() {
@@ -583,8 +588,6 @@ async function adminAddUser() {
 async function renderCalendar() {
   const {viewYear:y,viewMonth:m,session}=STATE;
   const now=today(); const curY=now.getFullYear(),curM=now.getMonth();
-
-  await cleanOldMonths(curY,curM);
 
   const title=new Date(y,m,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'});
   document.getElementById('calendar-title').textContent=title.charAt(0).toUpperCase()+title.slice(1);
@@ -698,11 +701,15 @@ async function renderCalendar() {
   if(isAdm) document.getElementById('admin-status').textContent=isApproved?'✅ Mes aprobado':'📋 Mes pendiente';
 }
 
+// cleanOldMonths: llamado SOLO al aprobar un mes, borra solo ese mes del pasado
+// NO se llama automáticamente en cada render para evitar borrar datos accidentalmente
 async function cleanOldMonths(curY,curM) {
   const g=await loadGuardias(),a=await loadApproved(); let ch=false;
-  [...Object.keys(g),...Object.keys(a)].forEach(k=>{
+  // Solo borrar meses estrictamente anteriores al actual (no el actual ni el siguiente)
+  [...new Set([...Object.keys(g),...Object.keys(a)])].forEach(k=>{
     const [y,mo]=k.split('-').map(Number);
-    if(y<curY||(y===curY&&mo-1<curM)){ delete g[k]; delete a[k]; ch=true; }
+    // mo es 1-based, convertir: mo-1 es el índice de mes
+    if(y<curY||(y===curY&&(mo-1)<curM)){ delete g[k]; delete a[k]; ch=true; }
   });
   if(ch){ await saveGuardias(g); await saveApproved(a); }
 }
